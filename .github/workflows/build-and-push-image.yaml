@@ -28,6 +28,7 @@ jobs:
       - name: Set version tags
         run: |
           echo "Ref name is ${{ github.ref_name }}"
+          echo "TAG_PREFIX is ${{ env.TAG_PREFIX }}"
 
           REF_NAME=${{ github.ref_name }}
           TAG_PREFIX=${{ env.TAG_PREFIX }}
@@ -58,8 +59,8 @@ jobs:
         uses: docker/build-push-action@v5
         env:
           REGISTRY: ${{ steps.login-ecr.outputs.registry }}
-          REGISTRY_ALIAS: w0y0d8g6
-          REPOSITORY: truefoundrycloud/llm-finetune
+          REGISTRY_ALIAS: truefoundrycloud
+          REPOSITORY: llm-finetune
           IMAGE_TAG_1: ${{ env.GITHUB_SHA }}
           IMAGE_TAG_2: ${{ env.VERSION_TAG }}
           IMAGE_TAG_3: ${{ env.ALT_VERSION_TAG }}
