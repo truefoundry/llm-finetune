@@ -1,0 +1,71 @@
+name: Build the LLM Finetuning Docker image
+
+on:
+  push:
+    tags:
+      - v*
+
+permissions:
+  id-token: write
+  contents: read
+
+concurrency:
+  group: build-llm-finetune-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  GITHUB_SHA: ${{ github.sha }}
+  TAG_PREFIX: "v"
+
+jobs:
+  build:
+    name: Build Image
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v3
+
+      - name: Set version tags
+        run: |
+          echo "Ref name is ${{ github.ref_name }}"
+
+          REF_NAME=${{ github.ref_name }}
+          TAG_PREFIX=${{ env.TAG_PREFIX }}
+          VERSION_TAG=$(echo $REF_NAME | awk -F$TAG_PREFIX '{print $2}')
+          echo "Setting VERSION_TAG equal to $VERSION_TAG"
+          echo "VERSION_TAG=$VERSION_TAG" >> $GITHUB_ENV
+
+          ALT_VERSION_TAG=$(echo $VERSION_TAG | awk -F- '{print $1}')-${GITHUB_SHA::7}
+          echo "Setting ALT_VERSION_TAG equal to $ALT_VERSION_TAG"
+          echo "ALT_VERSION_TAG=$ALT_VERSION_TAG" >> $GITHUB_ENV
+
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ secrets.PUBLIC_ECR_IAM_ROLE_ARN }}
+          aws-region: us-east-1
+
+      - name: Login to Amazon ECR
+        id: login-ecr
+        uses: aws-actions/amazon-ecr-login@v2
+        with:
+          registry-type: public
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Build and push image
+        uses: docker/build-push-action@v5
+        env:
+          REGISTRY: ${{ steps.login-ecr.outputs.registry }}
+          REGISTRY_ALIAS: w0y0d8g6
+          REPOSITORY: truefoundrycloud/llm-finetune
+          IMAGE_TAG_1: ${{ env.GITHUB_SHA }}
+          IMAGE_TAG_2: ${{ env.VERSION_TAG }}
+          IMAGE_TAG_3: ${{ env.ALT_VERSION_TAG }}
+        with:
+          context: .
+          push: true
+          tags: ${{ env.REGISTRY }}/${{ env.REGISTRY_ALIAS }}/${{ env.REPOSITORY }}:${{ env.IMAGE_TAG_1 }},${{ env.REGISTRY }}/${{ env.REGISTRY_ALIAS }}/${{ env.REPOSITORY }}:${{ env.IMAGE_TAG_2 }},${{ env.REGISTRY }}/${{ env.REGISTRY_ALIAS }}/${{ env.REPOSITORY }}:${{ env.IMAGE_TAG_3 }}
+          cache-from: type=registry,ref=${{ env.REGISTRY }}/${{ env.REGISTRY_ALIAS }}/${{ env.REPOSITORY }}:buildcache
+          cache-to: mode=max,image-manifest=true,type=registry,ref=${{ env.REGISTRY }}/${{ env.REGISTRY_ALIAS }}/${{ env.REPOSITORY }}:buildcache
