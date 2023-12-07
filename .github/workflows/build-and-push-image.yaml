@@ -15,7 +15,7 @@ concurrency:
 
 env:
   GITHUB_SHA: ${{ github.sha }}
-  TAG_PREFIX: "v"
+  TAG_PREFIX: "v-"
 
 jobs:
   build:
