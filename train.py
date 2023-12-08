@@ -1005,7 +1005,6 @@ def _train(
         else:
             train_data, eval_data = None, None
 
-        # !!! HERE !!!
         last_checkpoint_dir = get_checkpoint_for_resume_if_any(
             training_arguments=training_arguments,
             other_arguments=other_arguments,
@@ -1025,7 +1024,6 @@ def _train(
             max_length=other_arguments.max_length, tokenizer=tokenizer, model_config=model_config
         )
 
-        # !!! HERE !!!
         train_dataset, eval_dataset = build_dataset(
             train_data=train_data,
             eval_data=eval_data,
