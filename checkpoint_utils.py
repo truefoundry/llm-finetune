@@ -88,7 +88,8 @@ def get_best_checkpoint_for_resume_if_any(
                 return best_checkpoint_dir
 
             if mlfoundry_enable_reporting and mlfoundry_checkpoint_artifact_name:
-                best_step = int(best_checkpoint_name.split("checkpoint-", 1))
+                best_step = int(best_checkpoint_name.split("checkpoint-", 1)[1])
+                logger.info(f"Checking for checkpoint with step {best_step} from same job run...")
                 best_checkpoint_dir = download_checkpoint_of_step_if_present(
                     ml_repo=mlfoundry_ml_repo,
                     checkpoint_artifact_name=mlfoundry_checkpoint_artifact_name,
@@ -97,7 +98,7 @@ def get_best_checkpoint_for_resume_if_any(
                 )
                 return best_checkpoint_dir
     except Exception as e:
-        logger.warning("Unable to pull the best checkpoint")
+        logger.warning(f"Unable to get the best checkpoint, error: {e}")
 
     return None
 

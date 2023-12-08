@@ -37,7 +37,7 @@ from transformers.integrations.deepspeed import is_deepspeed_zero3_enabled
 from transformers.utils import WEIGHTS_NAME, is_torch_tf32_available
 from transformers.utils import logging as hf_logging_utils
 
-from checkpoint_utils import cleanup_checkpoints, get_checkpoint_for_resume_if_any
+from checkpoint_utils import cleanup_checkpoints, get_last_checkpoint_for_resume_if_any
 from data_utils import SequenceDataCollator, build_dataset, get_data
 from mlfoundry_utils import MLFoundryCallback, log_model_to_mlfoundry
 
@@ -587,7 +587,7 @@ def _train(
         else:
             train_data, eval_data = None, None
 
-        last_checkpoint_dir = get_checkpoint_for_resume_if_any(
+        last_checkpoint_dir = get_last_checkpoint_for_resume_if_any(
             cache_dir=CACHE_DIR,
             output_dir=training_arguments.output_dir,
             resume_from_checkpoint=training_arguments.resume_from_checkpoint,
