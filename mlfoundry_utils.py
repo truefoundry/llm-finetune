@@ -79,18 +79,17 @@ def get_latest_checkpoint_artifact_version_or_none(
 ) -> Optional[mlfoundry.ArtifactVersion]:
     # TODO (chiragjn):  Reduce coupling with checkpointing, log lines are still related
     latest_checkpoint_artifact = None
-    mlfoundry_client = mlfoundry.get_client()
     try:
-        latest_checkpoint_artifact = next(
-            mlfoundry_client.list_artifact_versions(ml_repo=ml_repo, name=checkpoint_artifact_name)
-        )
+        client = mlfoundry.get_client()
+        artifact_versions = client.list_artifact_versions(ml_repo=ml_repo, name=checkpoint_artifact_name)
+        latest_checkpoint_artifact = next(artifact_versions)
     except StopIteration:
         logger.info(
             f"No previous checkpoints found at artifact={checkpoint_artifact_name!r} in ml_repo={ml_repo!r}",
         )
     # TODO: We should have specific exception to identify if the artifact does not exist
-    except Exception as ex:
-        logger.info("No previous checkpoints found. Message=%s", ex)
+    except Exception as e:
+        logger.info("No previous checkpoints found. Message=%s", e)
 
     return latest_checkpoint_artifact
 
@@ -98,7 +97,18 @@ def get_latest_checkpoint_artifact_version_or_none(
 def get_checkpoint_artifact_version_with_step_or_none(
     ml_repo: str, checkpoint_artifact_name: str, step: int
 ) -> Optional[mlfoundry.ArtifactVersion]:
-    pass
+    checkpoint_artifact_version_with_step = None
+    try:
+        client = mlfoundry.get_client()
+        artifact_versions = client.list_artifact_versions(ml_repo=ml_repo, name=checkpoint_artifact_name)
+        for artifact_version in artifact_versions:
+            if artifact_version.step == step:
+                checkpoint_artifact_version_with_step = artifact_version
+                break
+    except Exception as e:
+        logger.warning(f"No checkpoint found for step {step}. Message=%s", e)
+
+    return checkpoint_artifact_version_with_step
 
 
 class MLFoundryCallback(TrainerCallback):
@@ -122,7 +132,10 @@ class MLFoundryCallback(TrainerCallback):
         if not state.is_world_process_zero:
             return
 
-        for loss_key, perplexity_key in [("loss", "train_perplexity"), ("eval_loss", "eval_perplexity")]:
+        for loss_key, perplexity_key in [
+            ("loss", "train_perplexity"),
+            ("eval_loss", "eval_perplexity"),
+        ]:
             if loss_key in logs:
                 try:
                     perplexity = math.exp(logs[loss_key])

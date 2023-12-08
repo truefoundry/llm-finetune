@@ -37,7 +37,7 @@ from transformers.integrations.deepspeed import is_deepspeed_zero3_enabled
 from transformers.utils import WEIGHTS_NAME, is_torch_tf32_available
 from transformers.utils import logging as hf_logging_utils
 
-from checkpoint_utils import cleanup_checkpoints, get_checkpoint_for_resume_if_any
+from checkpoint_utils import cleanup_checkpoints, get_last_checkpoint_for_resume_if_any
 from data_utils import SequenceDataCollator, build_dataset, get_data
 from mlfoundry_utils import MLFoundryCallback, log_model_to_mlfoundry
 
@@ -226,7 +226,11 @@ def merge_adapters_if_any(training_arguments: HFTrainingArguments, other_argumen
     logger.info("Merging lora adapter into main model. This can take a while ...")
     model = model.merge_and_unload()
     model.save_pretrained(training_arguments.output_dir, safe_serialization=True)
-    for filename in ["adapter_config.json", "adapter_model.safetensors", "adapter_model.bin"]:
+    for filename in [
+        "adapter_config.json",
+        "adapter_model.safetensors",
+        "adapter_model.bin",
+    ]:
         file_to_delete = os.path.join(training_arguments.output_dir, filename)
         if os.path.exists(file_to_delete):
             os.remove(file_to_delete)
@@ -466,7 +470,17 @@ def get_peft_wrapped_model(
                 # TODO (chiragjn): This is no longer always required. For e.g. LlamaRMSProp handles half precision correctly
                 # but right now even prepare_model_for_k_bit does it
                 module = module.to(torch.float32)
-        if any(ename in name for ename in ("lm_head", "embed_tokens", "embed_in", "embed_out", "wte", "wpe")):
+        if any(
+            ename in name
+            for ename in (
+                "lm_head",
+                "embed_tokens",
+                "embed_in",
+                "embed_out",
+                "wte",
+                "wpe",
+            )
+        ):
             if hasattr(module, "weight"):
                 if training_arguments.bf16 and module.weight.dtype == torch.float32:
                     # This is experimental, normally qlora repo uses it but some others don't recommend it. So far we haven't see major problems.
@@ -573,7 +587,7 @@ def _train(
         else:
             train_data, eval_data = None, None
 
-        last_checkpoint_dir = get_checkpoint_for_resume_if_any(
+        last_checkpoint_dir = get_last_checkpoint_for_resume_if_any(
             cache_dir=CACHE_DIR,
             output_dir=training_arguments.output_dir,
             resume_from_checkpoint=training_arguments.resume_from_checkpoint,
@@ -593,7 +607,9 @@ def _train(
         tokenizer, num_new_tokens = get_tokenizer(model_source)
 
         max_length = get_max_length(
-            max_length=other_arguments.max_length, tokenizer=tokenizer, model_config=model_config
+            max_length=other_arguments.max_length,
+            tokenizer=tokenizer,
+            model_config=model_config,
         )
 
         train_dataset, eval_dataset = build_dataset(
@@ -721,7 +737,8 @@ def train(training_arguments: HFTrainingArguments, other_arguments: OtherArgumen
             logger.info(f"Setting --mlfoundry_run_name automatically to {fallback_run_name}")
             other_arguments.mlfoundry_run_name = fallback_run_name
         run = mlfoundry_client.create_run(
-            ml_repo=other_arguments.mlfoundry_ml_repo, run_name=other_arguments.mlfoundry_run_name
+            ml_repo=other_arguments.mlfoundry_ml_repo,
+            run_name=other_arguments.mlfoundry_run_name,
         )
 
         if not other_arguments.mlfoundry_checkpoint_artifact_name:
@@ -738,7 +755,10 @@ def train(training_arguments: HFTrainingArguments, other_arguments: OtherArgumen
             )
 
         run.log_params(vars(other_arguments), flatten_params=True)
-        run.log_params(filter_trainer_args_for_logging(training_arguments, other_arguments), flatten_params=True)
+        run.log_params(
+            filter_trainer_args_for_logging(training_arguments, other_arguments),
+            flatten_params=True,
+        )
         # TODO: there are 110 params in training_arguments, we do not need to log all of them.
         # run.log_params(training_arguments.to_sanitized_dict(), flatten_params=True)
 
