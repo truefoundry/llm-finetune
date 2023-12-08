@@ -122,7 +122,10 @@ class MLFoundryCallback(TrainerCallback):
         if not state.is_world_process_zero:
             return
 
-        for loss_key, perplexity_key in [("loss", "train_perplexity"), ("eval_loss", "eval_perplexity")]:
+        for loss_key, perplexity_key in [
+            ("loss", "train_perplexity"),
+            ("eval_loss", "eval_perplexity"),
+        ]:
             if loss_key in logs:
                 try:
                     perplexity = math.exp(logs[loss_key])
