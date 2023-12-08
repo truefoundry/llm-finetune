@@ -689,7 +689,7 @@ def _train(
             cleanup_checkpoints(output_dir=training_arguments.output_dir)
     else:
         if accelerator_s.is_main_process:
-            cleanup_checkpoints(training_arguments=training_arguments)
+            cleanup_checkpoints(output_dir=training_arguments.output_dir)
         trainer.save_model(output_dir=training_arguments.output_dir)
 
     accelerator_s.wait_for_everyone()
