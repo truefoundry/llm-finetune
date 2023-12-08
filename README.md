@@ -30,8 +30,8 @@ train.py \
 --use_qlora true \
 --qlora_bit_length 4 \
 --lora_target_modules auto \
---lora_r 8 \
---lora_alpha 32 \
+--lora_r 32 \
+--lora_alpha 64 \
 --lora_dropout 0.05 \
 --lora_bias none \
 --mlfoundry_enable_reporting false \

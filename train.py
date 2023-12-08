@@ -18,8 +18,8 @@ import mlfoundry
 import numpy as np
 import torch
 import torch.backends.cuda
-import torch.distributed
-from accelerate import infer_auto_device_map, init_empty_weights
+from accelerate import Accelerator, infer_auto_device_map, init_empty_weights
+from accelerate.state import AcceleratorState
 from cloudfiles import CloudFile
 from datasets import Dataset, DatasetDict
 from deepspeed.utils.zero_to_fp32 import convert_zero_checkpoint_to_fp32_state_dict
@@ -27,7 +27,6 @@ from huggingface_hub import scan_cache_dir
 from peft import (
     AutoPeftModelForCausalLM,
     LoraConfig,
-    PeftModel,
     get_peft_model,
     prepare_model_for_kbit_training,
 )
@@ -52,7 +51,7 @@ from transformers.utils import WEIGHTS_NAME, is_torch_tf32_available
 from transformers.utils import logging as hf_logging_utils
 
 # TODO (chiragjn):
-#   - Refactor and split code into sub modules. Make torch.distributed calls more intuitive  with accelerate and decorators
+#   - Refactor and split code into sub modules.
 #   - Try using deepspeed (with resume) for all 3 modes - qlora, lora and full
 #   - Test and fix Deepspeed (Zero 3) weight gathering bugs during checkpointing if any
 #   - Add support for dataset packing
@@ -230,17 +229,6 @@ def _download_mlfoundry_artifact(artifact_version_fqn: str, download_dir: str, m
     return files_dir
 
 
-def resolve_checkpoint_artifact_name(
-    checkpoint_artifact_name: Optional[str],
-) -> Optional[str]:
-    if checkpoint_artifact_name:
-        return checkpoint_artifact_name
-    if TFY_INTERNAL_JOB_RUN_NAME:
-        job_name = TFY_INTERNAL_JOB_RUN_NAME
-        return f"checkpoint-{job_name}"
-    return None
-
-
 def download_last_checkpoint_if_present(ml_repo: str, checkpoint_artifact_name: str, local_dir: str) -> Optional[str]:
     mlfoundry_client = mlfoundry.get_client()
     try:
@@ -276,9 +264,10 @@ def get_checkpoint_for_resume_if_any(
     training_arguments: HFTrainingArguments,
     other_arguments: OtherArguments,
 ) -> Optional[str]:
+    accelerator_s = AcceleratorState()
     last_checkpoint_info_path = os.path.join(CACHE_DIR, "last_checkpoint_info.json")
     last_checkpoint_dir = None
-    if training_arguments.local_rank <= 0:
+    if accelerator_s.is_main_process:
         check_mlfoundry = False
         # resume_from_checkpoint can be None/true/false/string, None is default
         if training_arguments.resume_from_checkpoint is None:
@@ -325,7 +314,6 @@ def get_checkpoint_for_resume_if_any(
 def cleanup_checkpoints(
     training_arguments: HFTrainingArguments,
 ):
-    return
     logger.info("Cleaning up older checkpoints...")
     for f in os.listdir(training_arguments.output_dir):
         f_path = os.path.join(training_arguments.output_dir, f)
@@ -493,10 +481,10 @@ class MLFoundryCallback(TrainerCallback):
         if not state.is_world_process_zero:
             return
 
-        if not self._run or not self._checkpoint_artifact_name:
+        if not self._log_checkpoints:
             return
 
-        if not self._log_checkpoints:
+        if not self._run or not self._checkpoint_artifact_name:
             return
 
         ckpt_dir = f"checkpoint-{state.global_step}"
@@ -663,21 +651,19 @@ def load_data(path, max_num_samples: Optional[int] = None):
 
 
 def get_data(training_arguments: HFTrainingArguments, other_arguments: OtherArguments):
-    train_data, eval_data = None, None
-    if training_arguments.local_rank <= 0:
-        logger.info(f"Loading train dataset ...")
-        train_data = load_data(other_arguments.train_data, max_num_samples=other_arguments.max_num_samples)
-        eval_data = other_arguments.eval_data
-        if eval_data and eval_data != "NA":
-            logger.info(f"Loading eval dataset {other_arguments.eval_data}...")
-            eval_data = load_data(eval_data, max_num_samples=other_arguments.max_num_samples)
-        elif other_arguments.eval_size:
-            logger.info(f"No eval dataset given, splitting from training dataset...")
-            train_data, eval_data = train_test_split(
-                train_data,
-                test_size=other_arguments.eval_size,
-                random_state=training_arguments.data_seed,
-            )
+    logger.info(f"Loading train dataset ...")
+    train_data = load_data(other_arguments.train_data, max_num_samples=other_arguments.max_num_samples)
+    eval_data = other_arguments.eval_data
+    if eval_data and eval_data != "NA":
+        logger.info(f"Loading eval dataset {other_arguments.eval_data}...")
+        eval_data = load_data(eval_data, max_num_samples=other_arguments.max_num_samples)
+    elif other_arguments.eval_size:
+        logger.info(f"No eval dataset given, splitting from training dataset...")
+        train_data, eval_data = train_test_split(
+            train_data,
+            test_size=other_arguments.eval_size,
+            random_state=training_arguments.data_seed,
+        )
     return train_data, eval_data
 
 
@@ -689,9 +675,10 @@ def build_dataset(
     training_arguments: TrainingArguments,
     other_arguments: OtherArguments,
 ):
+    accelerator_s = AcceleratorState()
     logger.info("Building dataset...")
     dataset_cache_path = os.path.join(CACHE_DIR, "dataset")
-    if training_arguments.local_rank <= 0:
+    if accelerator_s.is_main_process:
         builder = CausalDatasetBuilder(
             tokenizer=tokenizer, max_length=max_length, train_on_prompt=other_arguments.train_on_prompt
         )
@@ -757,6 +744,12 @@ def _maybe_set_torch_max_memory(device: int):
 
 def _setup_logging(training_arguments: HFTrainingArguments):
     global logger
+
+    for handler in logger.handlers:
+        if isinstance(handler, logging.StreamHandler):
+            logger.removeHandler(handler)
+            hf_logging_utils.remove_handler(handler)
+
     handler = logging.StreamHandler(sys.stdout)
     handler.setLevel(logging.DEBUG)
     formatter = logging.Formatter(
@@ -809,6 +802,7 @@ def get_model(
     other_arguments: OtherArguments,
     device_map=None,
 ):
+    accelerator_s = AcceleratorState()
     logger.info("Loading model...")
     model_load_kwargs = {}
     model_load_kwargs["use_cache"] = False if training_arguments.gradient_checkpointing else True
@@ -842,11 +836,13 @@ def get_model(
             device_map=device_map,
             **model_load_kwargs,
         )
-        _log_model_parameters(model)
+        if accelerator_s.is_main_process:
+            _log_model_parameters(model)
         model = prepare_model_for_kbit_training(
             model, use_gradient_checkpointing=training_arguments.gradient_checkpointing
         )
-        _log_model_parameters(model)
+        if accelerator_s.is_main_process:
+            _log_model_parameters(model)
         # TODO (chiragjn): This is disabled because resuming does not work: https://github.com/TimDettmers/bitsandbytes/issues/782
         # training_arguments.optim = "paged_adamw_32bit"
     else:
@@ -870,6 +866,7 @@ def get_peft_wrapped_model(
     _device_map=None,
     _checkpoint_dir: Optional[str] = None,
 ):
+    acclerator_s = AcceleratorState()
     # if _checkpoint_dir:
     #     model = PeftModel.from_pretrained(
     #         model=model,
@@ -916,7 +913,8 @@ def get_peft_wrapped_model(
 
     model.enable_input_require_grads()
     model.print_trainable_parameters()
-    _log_model_parameters(model)
+    if acclerator_s.is_main_process:
+        _log_model_parameters(model)
     return model
 
 
@@ -989,49 +987,56 @@ def check_if_model_will_fit_only_with_gpus(
         )
 
 
-def train(
+def _train(
     *,
     training_arguments: HFTrainingArguments,
     other_arguments: OtherArguments,
     run: Optional[mlfoundry.MlFoundryRun] = None,
 ):
+    accelerator_s = AcceleratorState()
     set_seed(training_arguments.seed)
 
-    if training_arguments.world_size > 1 and training_arguments.local_rank > 0:
+    if not accelerator_s.is_main_process:
         logger.info("Waiting for main process to load data, process it and fetch any checkpoints ...")
-        torch.distributed.barrier()
 
-    train_data, eval_data = get_data(training_arguments=training_arguments, other_arguments=other_arguments)
+    with accelerator_s.main_process_first():
+        if accelerator_s.is_main_process:
+            train_data, eval_data = get_data(training_arguments=training_arguments, other_arguments=other_arguments)
+        else:
+            train_data, eval_data = None, None
 
-    last_checkpoint_dir = get_checkpoint_for_resume_if_any(
-        training_arguments=training_arguments,
-        other_arguments=other_arguments,
-    )
+        # !!! HERE !!!
+        last_checkpoint_dir = get_checkpoint_for_resume_if_any(
+            training_arguments=training_arguments,
+            other_arguments=other_arguments,
+        )
 
-    logger.info("Loading config ...")
-    model_config = AutoConfig.from_pretrained(other_arguments.model_id, trust_remote_code=True)
+        logger.info("Loading config ...")
+        model_config = AutoConfig.from_pretrained(other_arguments.model_id, trust_remote_code=True)
 
-    if last_checkpoint_dir:
-        model_source = last_checkpoint_dir
-    else:
-        model_source = other_arguments.model_id
+        if last_checkpoint_dir:
+            model_source = last_checkpoint_dir
+        else:
+            model_source = other_arguments.model_id
 
-    tokenizer, num_new_tokens = get_tokenizer(model_source)
+        tokenizer, num_new_tokens = get_tokenizer(model_source)
 
-    max_length = get_max_length(max_length=other_arguments.max_length, tokenizer=tokenizer, model_config=model_config)
+        max_length = get_max_length(
+            max_length=other_arguments.max_length, tokenizer=tokenizer, model_config=model_config
+        )
 
-    train_dataset, eval_dataset = build_dataset(
-        train_data=train_data,
-        eval_data=eval_data,
-        tokenizer=tokenizer,
-        max_length=max_length,
-        training_arguments=training_arguments,
-        other_arguments=other_arguments,
-    )
+        # !!! HERE !!!
+        train_dataset, eval_dataset = build_dataset(
+            train_data=train_data,
+            eval_data=eval_data,
+            tokenizer=tokenizer,
+            max_length=max_length,
+            training_arguments=training_arguments,
+            other_arguments=other_arguments,
+        )
 
-    if training_arguments.world_size > 1 and training_arguments.local_rank <= 0:
-        logger.info("Getting other ranks in sync with main process")
-        torch.distributed.barrier()
+        if accelerator_s.is_main_process:
+            logger.info("Getting other ranks in sync with main process")
 
     no_of_gpus = torch.cuda.device_count() if torch.cuda.is_available() else 0
     device_map = None
@@ -1098,12 +1103,9 @@ def train(
 
     trainer.train(resume_from_checkpoint=last_checkpoint_dir)
 
-    if training_arguments.world_size > 1:
-        logger.info("Syncing all processes")
-        torch.distributed.barrier()
+    accelerator_s.wait_for_everyone()
 
     logger.info("Saving model...")
-
     if training_arguments.deepspeed and is_deepspeed_zero3_enabled() and EXPORT_ZERO3_CHECKPOINT_TO_FP32:
         # TODO (chiragjn): Disabled for now. Test and Re-enable, check the half precision format
         #  Under ZeRO 3, when checkpointing, each rank saves their own part, in zero format
@@ -1111,43 +1113,28 @@ def train(
         #  then an additional pytorch_model.bin is saved as a 16-bit checkpoint
         #  if we want fp32 pytorch_model.bin then we would have to export separately from the checkpoint in zero format
         trainer.save_model(output_dir=training_arguments.output_dir)
-        if training_arguments.local_rank <= 0:
+        if accelerator_s.is_main_process:
             fp32_weights_path = os.path.join(training_arguments.output_dir, WEIGHTS_NAME)
             convert_zero_checkpoint_to_fp32_state_dict(trainer.state.best_model_checkpoint, fp32_weights_path)
             cleanup_checkpoints(training_arguments=training_arguments)
     else:
-        if training_arguments.local_rank <= 0:
+        if accelerator_s.is_main_process:
             cleanup_checkpoints(training_arguments=training_arguments)
         trainer.save_model(output_dir=training_arguments.output_dir)
 
-    if training_arguments.world_size > 1:
-        logger.info("Syncing all processes")
-        torch.distributed.barrier()
+    accelerator_s.wait_for_everyone()
 
 
-def main():
-    parser = HfArgumentParser(
-        (HFTrainingArguments, OtherArguments),
-        description="Fine-tune a language model on a text dataset",
-    )
-    training_arguments, other_arguments = parser.parse_args_into_dataclasses()
-
-    if other_arguments.use_lora or other_arguments.use_qlora:
-        if not torch.cuda.is_available() or torch.cuda.device_count() < 1:
-            raise RuntimeError("No GPUs detected. We need at least one gpu available for Lora/QLora finetuning!")
-
-    other_arguments.mlfoundry_checkpoint_artifact_name = resolve_checkpoint_artifact_name(
-        other_arguments.mlfoundry_checkpoint_artifact_name
-    )
+def train(training_arguments: HFTrainingArguments, other_arguments: OtherArguments):
+    accelerator = Accelerator()
+    accelerator_s = AcceleratorState()
     timestamp = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H-%M-%S")
-    *_, model_name = other_arguments.model_id.rsplit("/", 1)
-    model_name = "-".join(["finetuned", model_name, timestamp])
-    model_name = model_name.replace(".", "-")
-
     logger.info(f"Training Arguments: {training_arguments}")
     logger.info(f"Arguments: {other_arguments}")
 
     if other_arguments.use_lora or other_arguments.use_qlora:
+        if not torch.cuda.is_available() or torch.cuda.device_count() < 1:
+            raise RuntimeError("No GPUs detected. We need at least one gpu available for Lora/QLora finetuning!")
         # TODO (chiragjn): Support LoRA and QLoRA with deepspeed
         if training_arguments.deepspeed:
             raise ValueError(
@@ -1157,39 +1144,61 @@ def main():
     setup(training_arguments=training_arguments, other_arguments=other_arguments)
 
     run = None
-    if training_arguments.local_rank <= 0 and other_arguments.mlfoundry_enable_reporting:
+    if accelerator_s.is_main_process and other_arguments.mlfoundry_enable_reporting:
         mlfoundry_client = mlfoundry.get_client()
-        _run_name = (
-            other_arguments.mlfoundry_run_name if other_arguments.mlfoundry_run_name else f"finetune-{timestamp}"
+        if not other_arguments.mlfoundry_run_name:
+            fallback_run_name = f"finetune-{timestamp}"
+            logger.info(f"Setting --mlfoundry_run_name automatically to {fallback_run_name}")
+            other_arguments.mlfoundry_run_name = fallback_run_name
+        run = mlfoundry_client.create_run(
+            ml_repo=other_arguments.mlfoundry_ml_repo, run_name=other_arguments.mlfoundry_run_name
         )
-        run = mlfoundry_client.create_run(ml_repo=other_arguments.mlfoundry_ml_repo, run_name=_run_name)
 
-    if training_arguments.local_rank <= 0 and run:
+        if not other_arguments.mlfoundry_checkpoint_artifact_name:
+            if TFY_INTERNAL_JOB_RUN_NAME:
+                mlfoundry_checkpoint_artifact_name = f"checkpoint-{TFY_INTERNAL_JOB_RUN_NAME}"
+                logger.info(
+                    f"Setting --mlfoundry_checkpoint_artifact_name automatically to {mlfoundry_checkpoint_artifact_name}"
+                )
+                other_arguments.mlfoundry_checkpoint_artifact_name = mlfoundry_checkpoint_artifact_name
+
+        if other_arguments.mlfoundry_log_checkpoints and not other_arguments.mlfoundry_checkpoint_artifact_name:
+            raise ValueError(
+                "--mlfoundry_log_checkpoints was set to true but --mlfoundry_checkpoint_artifact_name is either unset or cannot be automatically decided. Please set it explicitly"
+            )
+
         run.log_params(vars(other_arguments), flatten_params=True)
         run.log_params(filter_trainer_args_for_logging(training_arguments, other_arguments), flatten_params=True)
         # TODO: there are 110 params in training_arguments, we do not need to log all of them.
         # run.log_params(training_arguments.to_sanitized_dict(), flatten_params=True)
 
     # Disk space management
-    if training_arguments.local_rank <= 0:
+    if accelerator_s.is_main_process:
         if other_arguments.cleanup_output_dir_on_start and os.path.exists(training_arguments.output_dir):
             logger.warning(f"--cleanup_output_dir_on_start was to set to True, wiping {training_arguments.output_dir}")
             shutil.rmtree(training_arguments.output_dir)
 
-    if training_arguments.local_rank <= 0:
+    if accelerator_s.is_main_process:
         if other_arguments.use_lora or other_arguments.use_qlora:
             check_if_model_will_fit_only_with_gpus(
                 training_arguments=training_arguments, other_arguments=other_arguments
             )
 
-    train(run=run, training_arguments=training_arguments, other_arguments=other_arguments)
+    _train(
+        training_arguments=training_arguments,
+        other_arguments=other_arguments,
+        run=run,
+    )
     _cleanup_gpus()
 
-    if training_arguments.local_rank <= 0:
+    if accelerator_s.is_main_process:
         if other_arguments.use_lora or other_arguments.use_qlora:
             merge_adapters_if_any(training_arguments=training_arguments, other_arguments=other_arguments)
 
-    if training_arguments.local_rank <= 0 and run:
+    if accelerator_s.is_main_process and run:
+        *_, model_name = other_arguments.model_id.rsplit("/", 1)
+        model_name = "-".join(["finetuned", model_name, timestamp])
+        model_name = model_name.replace(".", "-")
         log_model_to_mlfoundry(
             run=run,
             training_arguments=training_arguments,
@@ -1197,6 +1206,18 @@ def main():
             hf_hub_model_id=other_arguments.model_id,
         )
         run.end()
+
+
+def main():
+    parser = HfArgumentParser(
+        (HFTrainingArguments, OtherArguments),
+        description="Fine-tune a language model on a text dataset",
+    )
+    training_arguments, other_arguments = parser.parse_args_into_dataclasses()
+    train(
+        training_arguments=training_arguments,
+        other_arguments=other_arguments,
+    )
 
 
 if __name__ == "__main__":
