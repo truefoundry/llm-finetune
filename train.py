@@ -696,11 +696,15 @@ def build_dataset(
             tokenizer=tokenizer, max_length=max_length, train_on_prompt=other_arguments.train_on_prompt
         )
         dataset_dict = DatasetDict(train=Dataset.from_list(train_data), eval=Dataset.from_list(eval_data))
+        # TODO (chiragjn): Read cpu limits from cgroup, cpu_count is not usable in containers environment
+        num_proc = max(1, min(4, os.cpu_count()))
+        num_proc = num_proc if num_proc > 1 else None
         dataset_dict = dataset_dict.map(
             builder.construct_dataset,
             remove_columns=[PROMPT_KEY, COMPLETION_KEY],
             batched=True,
             batch_size=32,
+            num_proc=num_proc,
         )
         dataset_dict.save_to_disk(dataset_cache_path)
     else:

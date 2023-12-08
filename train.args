@@ -25,5 +25,6 @@
 --save_safetensors true
 --ddp_find_unused_parameters false
 --ddp_backend nccl
+--ddp_timeout 21600
 --half_precision_backend auto
 --auto_find_batch_size true
