@@ -1,13 +1,9 @@
-import copy
 import gc
 import json
 import logging
-import math
 import os
-import re
 import shutil
 import sys
-import tempfile
 import time
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
@@ -15,15 +11,10 @@ from typing import Any, Dict, Optional
 
 import bitsandbytes as bnb
 import mlfoundry
-import numpy as np
 import torch
-import torch.backends.cuda
 from accelerate import Accelerator, infer_auto_device_map, init_empty_weights
 from accelerate.state import AcceleratorState
-from cloudfiles import CloudFile
-from datasets import Dataset, DatasetDict
 from deepspeed.utils.zero_to_fp32 import convert_zero_checkpoint_to_fp32_state_dict
-from huggingface_hub import scan_cache_dir
 from peft import (
     AutoPeftModelForCausalLM,
     LoraConfig,
@@ -31,7 +22,6 @@ from peft import (
     prepare_model_for_kbit_training,
 )
 from peft.tuners.lora import LoraLayer
-from sklearn.model_selection import train_test_split
 from transformers import (
     AutoConfig,
     AutoModelForCausalLM,
@@ -40,18 +30,18 @@ from transformers import (
     HfArgumentParser,
     IntervalStrategy,
     Trainer,
-    TrainerCallback,
     TrainingArguments,
     set_seed,
 )
-from transformers.integrations import rewrite_logs
 from transformers.integrations.deepspeed import is_deepspeed_zero3_enabled
-from transformers.trainer_utils import get_last_checkpoint
 from transformers.utils import WEIGHTS_NAME, is_torch_tf32_available
 from transformers.utils import logging as hf_logging_utils
 
+from checkpoint_utils import cleanup_checkpoints, get_checkpoint_for_resume_if_any
+from data_utils import SequenceDataCollator, build_dataset, get_data
+from mlfoundry_utils import MLFoundryCallback, log_model_to_mlfoundry
+
 # TODO (chiragjn):
-#   - Refactor and split code into sub modules.
 #   - Try using deepspeed (with resume) for all 3 modes - qlora, lora and full
 #   - Test and fix Deepspeed (Zero 3) weight gathering bugs during checkpointing if any
 #   - Add support for dataset packing
@@ -60,7 +50,6 @@ from transformers.utils import logging as hf_logging_utils
 #   - Add support to use Apex FusedAdam
 #   - Add support to push to HF Hub
 
-MLFOUNDRY_ARTIFACT_PREFIX = "artifact:"
 TFY_INTERNAL_JOB_NAME = os.getenv("TFY_INTERNAL_COMPONENT_NAME")
 TFY_INTERNAL_JOB_RUN_NAME = os.getenv("TFY_INTERNAL_JOB_RUN_NAME")
 THIS_DIR = os.path.abspath(os.path.dirname(__name__))
@@ -68,7 +57,7 @@ CACHE_DIR = os.path.join(THIS_DIR, ".cache")
 EXPORT_ZERO3_CHECKPOINT_TO_FP32 = False
 logger = logging.getLogger("truefoundry-finetune")
 
-IGNORE_INDEX = -100  # -100 is the default ignore index in CrossEntropyLoss
+
 DEFAULT_PAD_TOKEN = "[PAD]"
 DEFAULT_EOS_TOKEN = "</s>"
 DEFAULT_BOS_TOKEN = "<s>"
@@ -86,6 +75,9 @@ class HFTrainingArguments(TrainingArguments):
         _resume = self.resume_from_checkpoint
         if _resume and _resume.strip().lower() in ("true", "false"):
             self.resume_from_checkpoint = _resume.strip().lower() == "true"
+        if self.gradient_checkpointing:
+            self.gradient_checkpointing_kwargs = self.gradient_checkpointing_kwargs or {}
+            self.gradient_checkpointing_kwargs["use_reentrant"] = False
         super().__post_init__()
 
 
@@ -198,10 +190,6 @@ class OtherArguments:
     )
 
 
-class DataValidationException(Exception):
-    pass
-
-
 def get_torch_dtype(training_arguments: HFTrainingArguments):
     torch_dtype = None
     if training_arguments.bf16:
@@ -209,116 +197,6 @@ def get_torch_dtype(training_arguments: HFTrainingArguments):
     elif training_arguments.fp16:
         torch_dtype = torch.float16
     return torch_dtype
-
-
-# --- Model checkpointing, saving and logging utils ---
-
-
-def _is_mlfoundry_artifact(value: str):
-    # TODO (chiragjn): This should be made more strict
-    if value.startswith(MLFOUNDRY_ARTIFACT_PREFIX):
-        return True
-
-
-def _download_mlfoundry_artifact(artifact_version_fqn: str, download_dir: str, move_to: Optional[str] = None):
-    client = mlfoundry.get_client()
-    artifact_version = client.get_artifact_version_by_fqn(artifact_version_fqn)
-    files_dir = artifact_version.download(download_dir)
-    if move_to:
-        files_dir = shutil.move(files_dir, move_to)
-    return files_dir
-
-
-def download_last_checkpoint_if_present(ml_repo: str, checkpoint_artifact_name: str, local_dir: str) -> Optional[str]:
-    mlfoundry_client = mlfoundry.get_client()
-    try:
-        # TODO (chiragjn): We can use `:latest` tag
-        latest_checkpoint_artifact = next(
-            mlfoundry_client.list_artifact_versions(ml_repo=ml_repo, name=checkpoint_artifact_name)
-        )
-    except StopIteration:
-        logger.info(
-            f"No previous checkpoints found at artifact={checkpoint_artifact_name!r} in ml_repo={ml_repo!r}",
-        )
-        return
-    # TODO: We should have specific exception to identify if the artifact does not exist
-    except Exception as ex:
-        logger.info("No previous checkpoints found. Message=%s", ex)
-        return
-
-    logger.info(
-        "Downloading last checkpoint from artifact version=%r step=%r to resume training",
-        latest_checkpoint_artifact.fqn,
-        latest_checkpoint_artifact.step,
-    )
-    os.makedirs(local_dir, exist_ok=True)
-    checkpoint_dir = os.path.join(local_dir, f"checkpoint-{latest_checkpoint_artifact.step}")
-    with tempfile.TemporaryDirectory() as temp_dir:
-        _download_mlfoundry_artifact(
-            artifact_version_fqn=latest_checkpoint_artifact.fqn, download_dir=temp_dir, move_to=checkpoint_dir
-        )
-    return checkpoint_dir
-
-
-def get_checkpoint_for_resume_if_any(
-    training_arguments: HFTrainingArguments,
-    other_arguments: OtherArguments,
-) -> Optional[str]:
-    accelerator_s = AcceleratorState()
-    last_checkpoint_info_path = os.path.join(CACHE_DIR, "last_checkpoint_info.json")
-    last_checkpoint_dir = None
-    if accelerator_s.is_main_process:
-        check_mlfoundry = False
-        # resume_from_checkpoint can be None/true/false/string, None is default
-        if training_arguments.resume_from_checkpoint is None:
-            check_mlfoundry = True
-        elif isinstance(training_arguments.resume_from_checkpoint, str):
-            if os.path.exists(training_arguments.resume_from_checkpoint):
-                last_checkpoint_dir = training_arguments.resume_from_checkpoint
-
-            # TODO (chiragjn): Add support for resuming from an already saved checkpoint outside of the job run
-            #   Although this is risky, because all other args (model, data, state) should remain same for a "correct" resume
-            #   Note: Instead if we just want to resume from last checkpoint of the same job run then just use --mlfoundry_enable_reporting true --mlfoundry_checkpoint_artifact_name <name>
-            # elif _is_mlfoundry_artifact(training_arguments.resume_from_checkpoint):
-            #     _download_mlfoundry_artifact(...)
-
-        elif training_arguments.resume_from_checkpoint is True:
-            # Try locating latest checkpoint from output dir first
-            if os.path.exists(training_arguments.output_dir):
-                possible_last_checkpoint_dir = get_last_checkpoint(training_arguments.output_dir)
-                if possible_last_checkpoint_dir:
-                    last_checkpoint_dir = possible_last_checkpoint_dir
-
-            if not last_checkpoint_dir:
-                check_mlfoundry = True
-
-        if check_mlfoundry and other_arguments.mlfoundry_enable_reporting:
-            logger.info("Checking for any past checkpoints from same job run...")
-            if other_arguments.mlfoundry_checkpoint_artifact_name:
-                last_checkpoint_dir = download_last_checkpoint_if_present(
-                    ml_repo=other_arguments.mlfoundry_ml_repo,
-                    checkpoint_artifact_name=other_arguments.mlfoundry_checkpoint_artifact_name,
-                    local_dir=training_arguments.output_dir,
-                )
-
-        with open(last_checkpoint_info_path, "w") as f:
-            last_checkpoint_info = {"last_checkpoint_dir": last_checkpoint_dir}
-            json.dump(last_checkpoint_info, f)
-    else:
-        with open(last_checkpoint_info_path, "r") as f:
-            last_checkpoint_info = json.load(f)
-        last_checkpoint_dir = last_checkpoint_info["last_checkpoint_dir"]
-    return last_checkpoint_dir
-
-
-def cleanup_checkpoints(
-    training_arguments: HFTrainingArguments,
-):
-    logger.info("Cleaning up older checkpoints...")
-    for f in os.listdir(training_arguments.output_dir):
-        f_path = os.path.join(training_arguments.output_dir, f)
-        if os.path.isdir(f_path) and f.startswith("checkpoint-"):
-            shutil.rmtree(f_path)
 
 
 def _cleanup_gpus():
@@ -352,44 +230,6 @@ def merge_adapters_if_any(training_arguments: HFTrainingArguments, other_argumen
         file_to_delete = os.path.join(training_arguments.output_dir, filename)
         if os.path.exists(file_to_delete):
             os.remove(file_to_delete)
-
-
-def log_model_to_mlfoundry(
-    run: mlfoundry.MlFoundryRun, training_arguments: HFTrainingArguments, model_name: str, hf_hub_model_id: str
-):
-    logger.info("Uploading Model...")
-    cleanup_checkpoints(training_arguments=training_arguments)
-
-    hf_cache_info = scan_cache_dir()
-    files_to_save = []
-    for repo in hf_cache_info.repos:
-        if repo.repo_id == hf_hub_model_id:
-            for revision in repo.revisions:
-                for file in revision.files:
-                    if file.file_path.name.endswith(".py"):
-                        files_to_save.append(file.file_path)
-                break
-
-    # copy the files to output_dir of pipeline
-    for file_path in files_to_save:
-        match = re.match(r".*snapshots\/[^\/]+\/(.*)", str(file_path))
-        if match:
-            relative_path = match.group(1)
-            destination_path = os.path.join(training_arguments.output_dir, relative_path)
-            os.makedirs(os.path.dirname(destination_path), exist_ok=True)
-            shutil.copy(str(file_path), destination_path)
-        else:
-            logger.warning("Python file in hf model cache in unknown path:", file_path)
-
-    metadata = training_arguments.to_sanitized_dict()
-    metadata.update({"huggingface_model_url": f"https://huggingface.co/{hf_hub_model_id}"})
-
-    run.log_model(
-        name=model_name,
-        model_file_or_folder=training_arguments.output_dir,
-        framework="transformers",
-        metadata=metadata,
-    )
 
 
 def filter_trainer_args_for_logging(
@@ -427,284 +267,6 @@ def filter_trainer_args_for_logging(
         arguments.update(qlora_args)
 
     return arguments
-
-
-class MLFoundryCallback(TrainerCallback):
-    def __init__(
-        self,
-        run: Optional[mlfoundry.MlFoundryRun] = None,
-        checkpoint_artifact_name: Optional[str] = None,
-        log_checkpoints: bool = True,
-    ):
-        self._run = run
-        self._checkpoint_artifact_name = checkpoint_artifact_name
-        self._log_checkpoints = log_checkpoints
-
-        if not self._checkpoint_artifact_name:
-            logger.warning("checkpoint_artifact_name not passed. Checkpoints will not be logged to MLFoundry")
-
-    # noinspection PyMethodOverriding
-    def on_log(self, args, state, control, logs, model=None, **kwargs):
-        # TODO (chiragjn): Hack for now, needs to be moved to `compute_metrics`
-        #   unfortunately compute metrics does not give us already computed metrics like eval_loss
-        if not state.is_world_process_zero:
-            return
-
-        for loss_key, perplexity_key in [("loss", "train_perplexity"), ("eval_loss", "eval_perplexity")]:
-            if loss_key in logs:
-                try:
-                    perplexity = math.exp(logs[loss_key])
-                except OverflowError:
-                    perplexity = float("inf")
-                    logger.warning(f"Encountered inf in eval perplexity, cannot log it as a metric")
-                logger.info(f"{perplexity_key}: {perplexity}")
-                logs[perplexity_key] = perplexity
-
-        logger.info(f"Metrics: {logs}")
-        if not self._run:
-            return
-
-        metrics = {}
-        for k, v in logs.items():
-            if isinstance(v, (int, float, np.integer, np.floating)) and math.isfinite(v):
-                metrics[k] = v
-            else:
-                logger.warning(
-                    f'Trainer is attempting to log a value of "{v}" of'
-                    f' type {type(v)} for key "{k}" as a metric.'
-                    " Mlfoundry's log_metric() only accepts finite float and"
-                    " int types so we dropped this attribute."
-                )
-        self._run.log_metrics(rewrite_logs(metrics), step=state.global_step)
-
-    def on_save(self, args, state, control, **kwargs):
-        if not state.is_world_process_zero:
-            return
-
-        if not self._log_checkpoints:
-            return
-
-        if not self._run or not self._checkpoint_artifact_name:
-            return
-
-        ckpt_dir = f"checkpoint-{state.global_step}"
-        artifact_path = os.path.join(args.output_dir, ckpt_dir)
-        description = None
-        if TFY_INTERNAL_JOB_NAME:
-            description = f"Checkpoint from finetuning job={TFY_INTERNAL_JOB_NAME} run={TFY_INTERNAL_JOB_RUN_NAME}"
-        logger.info(f"Uploading checkpoint {ckpt_dir} ...")
-        self._run.log_artifact(
-            name=self._checkpoint_artifact_name,
-            artifact_paths=[(artifact_path,)],
-            step=state.global_step,
-            description=description,
-        )
-
-
-# --- Data Processing Utils ---
-
-
-class DatasetBuilder:
-    """Dataset agnostic class to take in input_ids and labels and spit out tokens"""
-
-    def __init__(self, tokenizer, max_length):
-        self.tokenizer = tokenizer
-        self.max_length = max_length
-
-    def batch_tokenize(self, texts):
-        """Tokenizes text. Presently doesn't pad inputs, just returns input ids."""
-        tokenized = [
-            self.tokenizer(
-                text,
-                return_tensors="pt",
-                padding="longest",
-                max_length=self.max_length,
-                truncation=True,
-            ).input_ids
-            for text in texts
-        ]
-        return tokenized
-
-    def construct_dataset(self, input_batch):
-        tokenized_input_ids = self.batch_tokenize(input_batch[PROMPT_KEY])
-        tokenized_labels = self.batch_tokenize(input_batch[COMPLETION_KEY])
-        return {"input_ids": tokenized_input_ids, "labels": tokenized_labels}
-
-
-class CausalDatasetBuilder(DatasetBuilder):
-    """Builds generative dataset for Causal LM."""
-
-    def __init__(self, tokenizer, max_length, train_on_prompt=True):
-        super().__init__(tokenizer, max_length)
-        self.train_on_prompt = train_on_prompt
-
-    def construct_dataset(self, input_batch):
-        labels = []
-        for prompt, completion in zip(input_batch[PROMPT_KEY], input_batch[COMPLETION_KEY]):
-            labels.append(prompt + "\n" + completion + self.tokenizer.eos_token)
-        input_ids = [val.squeeze() for val in self.batch_tokenize(labels)]
-        labels = copy.deepcopy(input_ids)
-        if not self.train_on_prompt:
-            tokenized_prompts = self.batch_tokenize(input_batch[PROMPT_KEY])
-            prompt_lens = [val.shape[1] for val in tokenized_prompts]
-            for label, source_len in zip(labels, prompt_lens):
-                label[:source_len] = IGNORE_INDEX
-        return {"input_ids": input_ids, "labels": labels}
-
-
-class SequenceDataCollator:
-    """Collate examples for dynamic batch construction in supervised fine-tuning."""
-
-    def __init__(self, tokenizer, multiple_of=None):
-        self.tokenizer = tokenizer
-        self.multiple_of = multiple_of
-
-    def pad_to_multiple(self, tensor, value):
-        multiple = self.multiple_of
-        n = tensor.size(-1)
-        target_length = (n + multiple - 1) // multiple * multiple
-        return torch.nn.functional.pad(tensor, (0, target_length - n), value=value)
-
-    def __call__(self, instances):
-        input_ids = [instance["input_ids"] for instance in instances]
-        labels = [instance["labels"] for instance in instances]
-        input_ids = torch.nn.utils.rnn.pad_sequence(
-            input_ids, batch_first=True, padding_value=self.tokenizer.pad_token_id
-        )
-        labels = torch.nn.utils.rnn.pad_sequence(
-            labels, batch_first=True, padding_value=IGNORE_INDEX
-        )  # -100 tells torch to ignore these tokens in loss computation.
-        if self.multiple_of:
-            input_ids = self.pad_to_multiple(input_ids, value=self.tokenizer.pad_token_id)
-            labels = self.pad_to_multiple(labels, value=IGNORE_INDEX)
-        return dict(
-            input_ids=input_ids,
-            labels=labels,
-            attention_mask=input_ids.ne(self.tokenizer.pad_token_id),
-        )
-
-
-def _read_lines_from_files(download_path):
-    for root, dirs, files in os.walk(download_path):
-        for file in files:
-            filepath = os.path.join(root, file)
-            filename = os.path.basename(filepath)
-            if filename.endswith(".jsonl") and not filename.startswith("."):
-                logger.info(f"Loading file {filename} ...")
-                with open(filepath) as f:
-                    for line in f.readlines():
-                        yield line
-
-
-def _read_lines_from_cloudfile(path):
-    raw_data = CloudFile(path).get().decode("utf-8").split("\n")
-    for line in raw_data:
-        yield line
-
-
-def load_data(path, max_num_samples: Optional[int] = None):
-    data = []
-    n = max_num_samples if max_num_samples else -1
-    count = 0
-    with tempfile.TemporaryDirectory() as download_dir:
-        if _is_mlfoundry_artifact(path):
-            logger.info("Downloading artifact from mlfoundry")
-            download_path = _download_mlfoundry_artifact(artifact_version_fqn=path, download_dir=download_dir)
-            lines = _read_lines_from_files(download_path)
-        elif path.startswith("snowflake://"):
-            from utils import get_data_from_snowflake_table
-
-            logger.info(f"Loading data from snowflake db ...")
-            lines = get_data_from_snowflake_table(uri=path, max_num_samples=max_num_samples)
-        else:
-            logger.info(f"Loading data from link: {path}")
-            lines = _read_lines_from_cloudfile(path)
-        for line_no, line in enumerate(lines, start=1):
-            if n > 0 and count >= n:
-                break
-            if not line.strip():
-                continue
-            try:
-                datapoint_dict = json.loads(line)
-            except json.decoder.JSONDecodeError as je:
-                raise DataValidationException(
-                    f"Failed to parse json line on line number {line_no}. Line: {line[:150]}..."
-                ) from je
-            else:
-                for key in (PROMPT_KEY, COMPLETION_KEY):
-                    if key not in datapoint_dict:
-                        raise DataValidationException(
-                            f"Required key `{key}` is missing from json line on line number {line_no}. Line: {line[:150]}..."
-                        )
-                    if not isinstance(datapoint_dict[key], str):
-                        raise DataValidationException(
-                            f"Value for `{key}` is not string on line number {line_no}. Line: {line[:150]}..."
-                        )
-
-                datapoint_dict = {
-                    PROMPT_KEY: datapoint_dict[PROMPT_KEY],
-                    COMPLETION_KEY: datapoint_dict[COMPLETION_KEY],
-                }
-                data.append(datapoint_dict)
-                count += 1
-    return data
-
-
-def get_data(training_arguments: HFTrainingArguments, other_arguments: OtherArguments):
-    logger.info(f"Loading train dataset ...")
-    train_data = load_data(other_arguments.train_data, max_num_samples=other_arguments.max_num_samples)
-    eval_data = other_arguments.eval_data
-    if eval_data and eval_data != "NA":
-        logger.info(f"Loading eval dataset {other_arguments.eval_data}...")
-        eval_data = load_data(eval_data, max_num_samples=other_arguments.max_num_samples)
-    elif other_arguments.eval_size:
-        logger.info(f"No eval dataset given, splitting from training dataset...")
-        train_data, eval_data = train_test_split(
-            train_data,
-            test_size=other_arguments.eval_size,
-            random_state=training_arguments.data_seed,
-        )
-    return train_data, eval_data
-
-
-def build_dataset(
-    train_data,
-    eval_data,
-    tokenizer,
-    max_length: int,
-    training_arguments: TrainingArguments,
-    other_arguments: OtherArguments,
-):
-    accelerator_s = AcceleratorState()
-    logger.info("Building dataset...")
-    dataset_cache_path = os.path.join(CACHE_DIR, "dataset")
-    if accelerator_s.is_main_process:
-        builder = CausalDatasetBuilder(
-            tokenizer=tokenizer, max_length=max_length, train_on_prompt=other_arguments.train_on_prompt
-        )
-        dataset_dict = DatasetDict(train=Dataset.from_list(train_data), eval=Dataset.from_list(eval_data))
-        # TODO (chiragjn): Read cpu limits from cgroup, cpu_count is not usable in containers environment
-        num_proc = max(1, min(4, os.cpu_count()))
-        num_proc = num_proc if num_proc > 1 else None
-        dataset_dict = dataset_dict.map(
-            builder.construct_dataset,
-            remove_columns=[PROMPT_KEY, COMPLETION_KEY],
-            batched=True,
-            batch_size=32,
-            num_proc=num_proc,
-        )
-        dataset_dict.save_to_disk(dataset_cache_path)
-    else:
-        logger.info("Loading datasets from cache ...")
-        dataset_dict = DatasetDict.load_from_disk(dataset_cache_path)
-    dataset_dict = dataset_dict.with_format("torch")
-    train_dataset, eval_dataset = dataset_dict["train"], dataset_dict["eval"]
-    logger.info(f"Train data size: {len(train_dataset)}")
-    logger.info(f"Eval data size: {len(eval_dataset)}")
-    return train_dataset, eval_dataset
-
-
-# --- Core Training Code ---
 
 
 def _log_model_parameters(model):
@@ -1001,13 +563,23 @@ def _train(
 
     with accelerator_s.main_process_first():
         if accelerator_s.is_main_process:
-            train_data, eval_data = get_data(training_arguments=training_arguments, other_arguments=other_arguments)
+            train_data, eval_data = get_data(
+                train_data=other_arguments.train_data,
+                eval_data=other_arguments.eval_data,
+                eval_size=other_arguments.eval_size,
+                max_num_samples=other_arguments.max_num_samples,
+                data_seed=training_arguments.data_seed,
+            )
         else:
             train_data, eval_data = None, None
 
         last_checkpoint_dir = get_checkpoint_for_resume_if_any(
-            training_arguments=training_arguments,
-            other_arguments=other_arguments,
+            cache_dir=CACHE_DIR,
+            output_dir=training_arguments.output_dir,
+            resume_from_checkpoint=training_arguments.resume_from_checkpoint,
+            mlfoundry_enable_reporting=other_arguments.mlfoundry_enable_reporting,
+            mlfoundry_ml_repo=other_arguments.mlfoundry_ml_repo,
+            mlfoundry_checkpoint_artifact_name=other_arguments.mlfoundry_checkpoint_artifact_name,
         )
 
         logger.info("Loading config ...")
@@ -1029,8 +601,8 @@ def _train(
             eval_data=eval_data,
             tokenizer=tokenizer,
             max_length=max_length,
-            training_arguments=training_arguments,
-            other_arguments=other_arguments,
+            train_on_prompt=other_arguments.train_on_prompt,
+            cache_dir=CACHE_DIR,
         )
 
         if accelerator_s.is_main_process:
@@ -1089,12 +661,12 @@ def _train(
         train_dataset=train_dataset,
         eval_dataset=eval_dataset,
         args=training_arguments,
-        data_collator=SequenceDataCollator(tokenizer, multiple_of=other_arguments.pad_to_multiple_of),
+        data_collator=SequenceDataCollator(tokenizer=tokenizer, multiple_of=other_arguments.pad_to_multiple_of),
         callbacks=[
             MLFoundryCallback(
                 run=run,
-                checkpoint_artifact_name=other_arguments.mlfoundry_checkpoint_artifact_name,
                 log_checkpoints=other_arguments.mlfoundry_log_checkpoints,
+                checkpoint_artifact_name=other_arguments.mlfoundry_checkpoint_artifact_name,
             )
         ],
     )
@@ -1114,17 +686,17 @@ def _train(
         if accelerator_s.is_main_process:
             fp32_weights_path = os.path.join(training_arguments.output_dir, WEIGHTS_NAME)
             convert_zero_checkpoint_to_fp32_state_dict(trainer.state.best_model_checkpoint, fp32_weights_path)
-            cleanup_checkpoints(training_arguments=training_arguments)
+            cleanup_checkpoints(output_dir=training_arguments.output_dir)
     else:
         if accelerator_s.is_main_process:
-            cleanup_checkpoints(training_arguments=training_arguments)
+            cleanup_checkpoints(output_dir=training_arguments.output_dir)
         trainer.save_model(output_dir=training_arguments.output_dir)
 
     accelerator_s.wait_for_everyone()
 
 
 def train(training_arguments: HFTrainingArguments, other_arguments: OtherArguments):
-    accelerator = Accelerator()
+    Accelerator()
     accelerator_s = AcceleratorState()
     timestamp = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H-%M-%S")
     logger.info(f"Training Arguments: {training_arguments}")
@@ -1197,11 +769,13 @@ def train(training_arguments: HFTrainingArguments, other_arguments: OtherArgumen
         *_, model_name = other_arguments.model_id.rsplit("/", 1)
         model_name = "-".join(["finetuned", model_name, timestamp])
         model_name = model_name.replace(".", "-")
+        cleanup_checkpoints(output_dir=training_arguments.output_dir)
         log_model_to_mlfoundry(
             run=run,
-            training_arguments=training_arguments,
             model_name=model_name,
+            model_dir=training_arguments.output_dir,
             hf_hub_model_id=other_arguments.model_id,
+            metadata=training_arguments.to_sanitized_dict() or {},
         )
         run.end()
 
