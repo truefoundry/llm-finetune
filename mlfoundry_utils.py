@@ -1,0 +1,173 @@
+import logging
+import math
+import os
+import re
+import shutil
+from typing import Any, Dict, Optional
+
+import mlfoundry
+import numpy as np
+from huggingface_hub import scan_cache_dir
+from transformers import TrainerCallback
+from transformers.integrations import rewrite_logs
+
+logger = logging.getLogger("truefoundry-finetune")
+
+MLFOUNDRY_ARTIFACT_PREFIX = "artifact:"
+TFY_INTERNAL_JOB_NAME = os.getenv("TFY_INTERNAL_COMPONENT_NAME")
+TFY_INTERNAL_JOB_RUN_NAME = os.getenv("TFY_INTERNAL_JOB_RUN_NAME")
+
+
+def is_mlfoundry_artifact(value: str):
+    # TODO (chiragjn): This should be made more strict
+    if value.startswith(MLFOUNDRY_ARTIFACT_PREFIX):
+        return True
+
+
+def download_mlfoundry_artifact(artifact_version_fqn: str, download_dir: str, move_to: Optional[str] = None):
+    client = mlfoundry.get_client()
+    artifact_version = client.get_artifact_version_by_fqn(artifact_version_fqn)
+    files_dir = artifact_version.download(download_dir)
+    if move_to:
+        files_dir = shutil.move(files_dir, move_to)
+    return files_dir
+
+
+def log_model_to_mlfoundry(
+    run: mlfoundry.MlFoundryRun,
+    model_name: str,
+    model_dir: str,
+    hf_hub_model_id: str,
+    metadata: Optional[Dict[str, Any]] = None,
+):
+    metadata = metadata or {}
+    logger.info("Uploading Model...")
+    hf_cache_info = scan_cache_dir()
+    files_to_save = []
+    for repo in hf_cache_info.repos:
+        if repo.repo_id == hf_hub_model_id:
+            for revision in repo.revisions:
+                for file in revision.files:
+                    if file.file_path.name.endswith(".py"):
+                        files_to_save.append(file.file_path)
+                break
+
+    # copy the files to output_dir of pipeline
+    for file_path in files_to_save:
+        match = re.match(r".*snapshots\/[^\/]+\/(.*)", str(file_path))
+        if match:
+            relative_path = match.group(1)
+            destination_path = os.path.join(model_dir, relative_path)
+            os.makedirs(os.path.dirname(destination_path), exist_ok=True)
+            shutil.copy(str(file_path), destination_path)
+        else:
+            logger.warning("Python file in hf model cache in unknown path:", file_path)
+
+    metadata.update({"huggingface_model_url": f"https://huggingface.co/{hf_hub_model_id}"})
+
+    run.log_model(
+        name=model_name,
+        model_file_or_folder=model_dir,
+        framework=mlfoundry.ModelFramework.TRANSFORMERS,
+        metadata=metadata,
+    )
+
+
+def get_latest_checkpoint_artifact_version_or_none(
+    ml_repo: str,
+    checkpoint_artifact_name: str,
+) -> Optional[mlfoundry.ArtifactVersion]:
+    # TODO (chiragjn):  Reduce coupling with checkpointing, log lines are still related
+    latest_checkpoint_artifact = None
+    mlfoundry_client = mlfoundry.get_client()
+    try:
+        latest_checkpoint_artifact = next(
+            mlfoundry_client.list_artifact_versions(ml_repo=ml_repo, name=checkpoint_artifact_name)
+        )
+    except StopIteration:
+        logger.info(
+            f"No previous checkpoints found at artifact={checkpoint_artifact_name!r} in ml_repo={ml_repo!r}",
+        )
+    # TODO: We should have specific exception to identify if the artifact does not exist
+    except Exception as ex:
+        logger.info("No previous checkpoints found. Message=%s", ex)
+
+    return latest_checkpoint_artifact
+
+
+def get_checkpoint_artifact_version_with_step_or_none(
+    ml_repo: str, checkpoint_artifact_name: str, step: int
+) -> Optional[mlfoundry.ArtifactVersion]:
+    pass
+
+
+class MLFoundryCallback(TrainerCallback):
+    def __init__(
+        self,
+        run: Optional[mlfoundry.MlFoundryRun] = None,
+        log_checkpoints: bool = True,
+        checkpoint_artifact_name: Optional[str] = None,
+    ):
+        self._run = run
+        self._checkpoint_artifact_name = checkpoint_artifact_name
+        self._log_checkpoints = log_checkpoints
+
+        if not self._checkpoint_artifact_name:
+            logger.warning("checkpoint_artifact_name not passed. Checkpoints will not be logged to MLFoundry")
+
+    # noinspection PyMethodOverriding
+    def on_log(self, args, state, control, logs, model=None, **kwargs):
+        # TODO (chiragjn): Hack for now, needs to be moved to `compute_metrics`
+        #   unfortunately compute metrics does not give us already computed metrics like eval_loss
+        if not state.is_world_process_zero:
+            return
+
+        for loss_key, perplexity_key in [("loss", "train_perplexity"), ("eval_loss", "eval_perplexity")]:
+            if loss_key in logs:
+                try:
+                    perplexity = math.exp(logs[loss_key])
+                except OverflowError:
+                    perplexity = float("inf")
+                    logger.warning(f"Encountered inf in eval perplexity, cannot log it as a metric")
+                logger.info(f"{perplexity_key}: {perplexity}")
+                logs[perplexity_key] = perplexity
+
+        logger.info(f"Metrics: {logs}")
+        if not self._run:
+            return
+
+        metrics = {}
+        for k, v in logs.items():
+            if isinstance(v, (int, float, np.integer, np.floating)) and math.isfinite(v):
+                metrics[k] = v
+            else:
+                logger.warning(
+                    f'Trainer is attempting to log a value of "{v}" of'
+                    f' type {type(v)} for key "{k}" as a metric.'
+                    " Mlfoundry's log_metric() only accepts finite float and"
+                    " int types so we dropped this attribute."
+                )
+        self._run.log_metrics(rewrite_logs(metrics), step=state.global_step)
+
+    def on_save(self, args, state, control, **kwargs):
+        if not state.is_world_process_zero:
+            return
+
+        if not self._log_checkpoints:
+            return
+
+        if not self._run or not self._checkpoint_artifact_name:
+            return
+
+        ckpt_dir = f"checkpoint-{state.global_step}"
+        artifact_path = os.path.join(args.output_dir, ckpt_dir)
+        description = None
+        if TFY_INTERNAL_JOB_NAME:
+            description = f"Checkpoint from finetuning job={TFY_INTERNAL_JOB_NAME} run={TFY_INTERNAL_JOB_RUN_NAME}"
+        logger.info(f"Uploading checkpoint {ckpt_dir} ...")
+        self._run.log_artifact(
+            name=self._checkpoint_artifact_name,
+            artifact_paths=[(artifact_path,)],
+            step=state.global_step,
+            description=description,
+        )
