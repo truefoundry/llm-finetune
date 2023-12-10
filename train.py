@@ -27,6 +27,7 @@ from transformers import (
     AutoModelForCausalLM,
     AutoTokenizer,
     BitsAndBytesConfig,
+    EarlyStoppingCallback,
     HfArgumentParser,
     IntervalStrategy,
     Trainer,
@@ -163,6 +164,18 @@ class OtherArguments:
     max_num_samples: Optional[int] = field(
         default=None,
         metadata={"help": "For quick debugging purposes, how many samples to use (default: all)"},
+    )
+    early_stopping_patience: Optional[int] = field(
+        default=None,
+        metadata={
+            "help": "How many evaluation steps to wait for the metric (loss) to improve before stopping. None or 0 means early stopping is not applied (default: None)"
+        },
+    )
+    early_stopping_threshold: float = field(
+        default=0.0,
+        metadata={
+            "help": "When early stopping is enabled the metric (loss) should improve by at least this much to not count towards patience/stop (default: 0.0)"
+        },
     )
     mlfoundry_enable_reporting: bool = field(
         default=True,
@@ -671,6 +684,22 @@ def _train(
 
     logger.info("Training...")
     # TODO (chiragjn): Add text generation metrics to `compute_metrics
+    callbacks = []
+    if run:
+        callbacks.append(
+            MLFoundryCallback(
+                run=run,
+                log_checkpoints=other_arguments.mlfoundry_log_checkpoints,
+                checkpoint_artifact_name=other_arguments.mlfoundry_checkpoint_artifact_name,
+            )
+        )
+    if other_arguments.early_stopping_patience:
+        callbacks.append(
+            EarlyStoppingCallback(
+                early_stopping_patience=other_arguments.early_stopping_patience,
+                early_stopping_threshold=other_arguments.early_stopping_threshold,
+            )
+        )
     trainer = Trainer(
         model=model,
         tokenizer=tokenizer,
@@ -678,13 +707,7 @@ def _train(
         eval_dataset=eval_dataset,
         args=training_arguments,
         data_collator=SequenceDataCollator(tokenizer=tokenizer, multiple_of=other_arguments.pad_to_multiple_of),
-        callbacks=[
-            MLFoundryCallback(
-                run=run,
-                log_checkpoints=other_arguments.mlfoundry_log_checkpoints,
-                checkpoint_artifact_name=other_arguments.mlfoundry_checkpoint_artifact_name,
-            )
-        ],
+        callbacks=callbacks,
     )
 
     trainer.train(resume_from_checkpoint=last_checkpoint_dir)

@@ -1,9 +1,10 @@
 {
   "fp16": {
     "enabled": "auto",
+    "auto_cast": false,
     "loss_scale": 0,
     "loss_scale_window": 1000,
-    "initial_scale_power": 16,
+    "initial_scale_power": 32,
     "hysteresis": 2,
     "min_loss_scale": 1
   },
@@ -19,15 +20,6 @@
       "weight_decay": "auto"
     }
   },
-  "scheduler": {
-    "type": "WarmupDecayLR",
-    "params": {
-      "warmup_min_lr": "auto",
-      "warmup_max_lr": "auto",
-      "warmup_num_steps": "auto",
-      "total_num_steps": "auto"
-    }
-  },
   "zero_optimization": {
     "stage": 2,
     "overlap_comm": true,
@@ -35,7 +27,7 @@
     "sub_group_size": 1e9,
     "reduce_bucket_size": "auto",
     "allgather_partitions": true,
-    "allgather_bucket_size": 5e8,
+    "allgather_bucket_size": 2e8,
     "reduce_scatter": true,
     "round_robin_gradients": true
   },
