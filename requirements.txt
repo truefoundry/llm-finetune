@@ -1,3 +1,5 @@
+--extra-index-url https://download.pytorch.org/whl/
+torch==2.1.1+cu118
 cloud-files==4.15.2
 mlfoundry==0.10.2
 transformers[accelerate,deepspeed,sentencepiece,tokenizers]==4.35.2
