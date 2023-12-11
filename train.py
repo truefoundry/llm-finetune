@@ -218,9 +218,9 @@ def _cleanup_gpus():
     #   - https://github.com/huggingface/peft/pull/1063
     #   - https://github.com/huggingface/transformers/pull/27412
     # Yes, sleeping is stupid but necessary till the above PRs are merged and made available in a new version
-    for _ in range(5):
+    for _ in range(6):
         gc.collect()
-        time.sleep(3)
+        time.sleep(10)
         if torch.cuda.is_available():
             torch.cuda.empty_cache()
             torch.cuda.synchronize()
@@ -234,7 +234,7 @@ def merge_adapters_if_any(training_arguments: HFTrainingArguments, other_argumen
         trust_remote_code=True,
         low_cpu_mem_usage=True,
         torch_dtype=get_torch_dtype(training_arguments),
-        device_map="sequential",
+        device_map="balanced",
     )
     logger.info("Merging lora adapter into main model. This can take a while ...")
     model = model.merge_and_unload()
@@ -318,7 +318,7 @@ def _maybe_set_torch_max_memory(device: int):
             logger.info(f"Setting max memory limit on device {device} to {frac} ({torch_per_process_memory_limit} MiB)")
             torch.cuda.set_per_process_memory_fraction(frac, device=device)
     else:
-        torch.cuda.set_per_process_memory_fraction(0.9, device=device)
+        torch.cuda.set_per_process_memory_fraction(0.95, device=device)
 
 
 def _setup_logging(training_arguments: HFTrainingArguments):
