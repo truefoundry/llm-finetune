@@ -5,9 +5,9 @@ import shutil
 import tempfile
 from typing import Optional, Union
 
-from accelerate.state import AcceleratorState
 from transformers.trainer_utils import get_last_checkpoint
 
+from dist_utils import DistributedState
 from mlfoundry_utils import (
     download_mlfoundry_artifact,
     get_checkpoint_artifact_version_with_step_or_none,
@@ -104,69 +104,56 @@ def get_best_checkpoint_for_resume_if_any(
 
 
 def get_last_checkpoint_for_resume_if_any(
-    cache_dir,
     output_dir,
     resume_from_checkpoint: Optional[Union[bool, str]],
     mlfoundry_enable_reporting: bool,
     mlfoundry_ml_repo: Optional[str],
     mlfoundry_checkpoint_artifact_name: Optional[str],
 ) -> Optional[str]:
-    accelerator_s = AcceleratorState()
-    last_checkpoint_info_path = os.path.join(cache_dir, "last_checkpoint_info.json")
     last_checkpoint_dir = None
-    if accelerator_s.is_main_process:
-        check_mlfoundry = False
-        # resume_from_checkpoint can be None/true/false/string, None is default
-        if resume_from_checkpoint is None:
-            # If no explicit choice has been made we will try and check with mlfoundry we are allowed to
+    check_mlfoundry = False
+    # resume_from_checkpoint can be None/true/false/string, None is default
+    if resume_from_checkpoint is None:
+        # If no explicit choice has been made we will try and check with mlfoundry we are allowed to
+        check_mlfoundry = True
+    elif isinstance(resume_from_checkpoint, str):
+        # If an explicit choice has been made we will check if the checkpoint exists on disk
+        if os.path.exists(resume_from_checkpoint):
+            last_checkpoint_dir = resume_from_checkpoint
+        else:
+            raise ValueError(f"Provided path for --resume_from_checkpoint `{resume_from_checkpoint}` does not exist!")
+        # TODO (chiragjn): Add support for resuming from an already saved checkpoint outside of the job run
+        #   Although this is risky, because all other args (model, data, state) should remain same for a "correct" resume
+        #   Note: Instead if we just want to resume from last checkpoint of the same job run then just use --mlfoundry_enable_reporting true --mlfoundry_checkpoint_artifact_name <name>
+        # elif _is_mlfoundry_artifact(training_arguments.resume_from_checkpoint):
+        #     _download_mlfoundry_artifact(...)
+    elif resume_from_checkpoint is True:
+        # If set to true, we will automatically locate the latest checkpoint, first checking output dir, next mlfoundry if we are allowed to
+        if os.path.exists(output_dir):
+            possible_last_checkpoint_dir = get_last_checkpoint(output_dir)
+            if possible_last_checkpoint_dir:
+                last_checkpoint_dir = possible_last_checkpoint_dir
+
+        if not last_checkpoint_dir:
             check_mlfoundry = True
-        elif isinstance(resume_from_checkpoint, str):
-            # If an explicit choice has been made we will check if the checkpoint exists on disk
-            if os.path.exists(resume_from_checkpoint):
-                last_checkpoint_dir = resume_from_checkpoint
-            else:
-                raise ValueError(
-                    f"Provided path for --resume_from_checkpoint `{resume_from_checkpoint}` does not exist!"
-                )
-            # TODO (chiragjn): Add support for resuming from an already saved checkpoint outside of the job run
-            #   Although this is risky, because all other args (model, data, state) should remain same for a "correct" resume
-            #   Note: Instead if we just want to resume from last checkpoint of the same job run then just use --mlfoundry_enable_reporting true --mlfoundry_checkpoint_artifact_name <name>
-            # elif _is_mlfoundry_artifact(training_arguments.resume_from_checkpoint):
-            #     _download_mlfoundry_artifact(...)
-        elif resume_from_checkpoint is True:
-            # If set to true, we will automatically locate the latest checkpoint, first checking output dir, next mlfoundry if we are allowed to
-            if os.path.exists(output_dir):
-                possible_last_checkpoint_dir = get_last_checkpoint(output_dir)
-                if possible_last_checkpoint_dir:
-                    last_checkpoint_dir = possible_last_checkpoint_dir
 
-            if not last_checkpoint_dir:
-                check_mlfoundry = True
+    if check_mlfoundry and mlfoundry_enable_reporting and mlfoundry_checkpoint_artifact_name:
+        logger.info("Checking for any past checkpoints from same job run...")
+        last_checkpoint_dir = download_last_checkpoint_if_present(
+            ml_repo=mlfoundry_ml_repo,
+            checkpoint_artifact_name=mlfoundry_checkpoint_artifact_name,
+            local_dir=output_dir,
+        )
 
-        if check_mlfoundry and mlfoundry_enable_reporting and mlfoundry_checkpoint_artifact_name:
-            logger.info("Checking for any past checkpoints from same job run...")
-            last_checkpoint_dir = download_last_checkpoint_if_present(
-                ml_repo=mlfoundry_ml_repo,
-                checkpoint_artifact_name=mlfoundry_checkpoint_artifact_name,
-                local_dir=output_dir,
-            )
+    if last_checkpoint_dir:
+        _ = get_best_checkpoint_for_resume_if_any(
+            output_dir=output_dir,
+            last_checkpoint_dir=last_checkpoint_dir,
+            mlfoundry_enable_reporting=mlfoundry_enable_reporting,
+            mlfoundry_ml_repo=mlfoundry_ml_repo,
+            mlfoundry_checkpoint_artifact_name=mlfoundry_checkpoint_artifact_name,
+        )
 
-        with open(last_checkpoint_info_path, "w") as f:
-            last_checkpoint_info = {"last_checkpoint_dir": last_checkpoint_dir}
-            json.dump(last_checkpoint_info, f)
-
-        if last_checkpoint_dir:
-            _ = get_best_checkpoint_for_resume_if_any(
-                output_dir=output_dir,
-                last_checkpoint_dir=last_checkpoint_dir,
-                mlfoundry_enable_reporting=mlfoundry_enable_reporting,
-                mlfoundry_ml_repo=mlfoundry_ml_repo,
-                mlfoundry_checkpoint_artifact_name=mlfoundry_checkpoint_artifact_name,
-            )
-    else:
-        with open(last_checkpoint_info_path, "r") as f:
-            last_checkpoint_info = json.load(f)
-        last_checkpoint_dir = last_checkpoint_info["last_checkpoint_dir"]
     return last_checkpoint_dir
 
 

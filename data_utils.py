@@ -7,7 +7,6 @@ from typing import Optional
 from urllib.parse import parse_qsl, urlparse
 
 import torch
-from accelerate.state import AcceleratorState
 from cloudfiles import CloudFile
 from datasets import Dataset, DatasetDict
 from sklearn.model_selection import train_test_split
@@ -249,30 +248,17 @@ def build_dataset(
     tokenizer,
     max_length: int,
     train_on_prompt: bool,
-    cache_dir: str,
 ):
-    accelerator_s = AcceleratorState()
-    logger.info("Building dataset...")
-    dataset_cache_path = os.path.join(cache_dir, "dataset")
-    if accelerator_s.is_main_process:
-        builder = CausalDatasetBuilder(tokenizer=tokenizer, max_length=max_length, train_on_prompt=train_on_prompt)
-        dataset_dict = DatasetDict(train=Dataset.from_list(train_data), eval=Dataset.from_list(eval_data))
-        # TODO (chiragjn): Read cpu limits from cgroup, cpu_count is not usable in containers environment
-        num_proc = max(1, min(4, os.cpu_count()))
-        num_proc = num_proc if num_proc > 1 else None
-        dataset_dict = dataset_dict.map(
-            builder.construct_dataset,
-            remove_columns=[PROMPT_KEY, COMPLETION_KEY],
-            batched=True,
-            batch_size=32,
-            num_proc=num_proc,
-        )
-        dataset_dict.save_to_disk(dataset_cache_path)
-    else:
-        logger.info("Loading datasets from cache ...")
-        dataset_dict = DatasetDict.load_from_disk(dataset_cache_path)
-    dataset_dict = dataset_dict.with_format("torch")
-    train_dataset, eval_dataset = dataset_dict["train"], dataset_dict["eval"]
-    logger.info(f"Train data size: {len(train_dataset)}")
-    logger.info(f"Eval data size: {len(eval_dataset)}")
-    return train_dataset, eval_dataset
+    builder = CausalDatasetBuilder(tokenizer=tokenizer, max_length=max_length, train_on_prompt=train_on_prompt)
+    dataset_dict = DatasetDict(train=Dataset.from_list(train_data), eval=Dataset.from_list(eval_data))
+    # TODO (chiragjn): Read cpu limits from cgroup, cpu_count is not usable in containers environment
+    num_proc = max(1, min(4, os.cpu_count()))
+    num_proc = num_proc if num_proc > 1 else None
+    dataset_dict = dataset_dict.map(
+        builder.construct_dataset,
+        remove_columns=[PROMPT_KEY, COMPLETION_KEY],
+        batched=True,
+        batch_size=32,
+        num_proc=num_proc,
+    )
+    return dataset_dict
