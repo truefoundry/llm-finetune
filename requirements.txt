@@ -2,10 +2,11 @@
 torch==2.1.1+cu118
 cloud-files==4.15.2
 mlfoundry==0.10.2
-transformers[accelerate,deepspeed,sentencepiece,tokenizers]==4.35.2
+transformers[deepspeed,sentencepiece,tokenizers]==4.36.1
+accelerate==0.25.0
 datasets==2.14.7
 peft==0.6.2
-bitsandbytes==0.41.2.post2
+bitsandbytes==0.41.3.post2
 ninja==1.11.1.1
 packaging==23.1
 einops==0.7.0

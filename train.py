@@ -7,7 +7,7 @@ import sys
 import time
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
-from typing import Any, Dict, Optional
+from typing import Any, Dict, Optional, Union
 
 import bitsandbytes as bnb
 import mlfoundry
@@ -80,6 +80,10 @@ class HFTrainingArguments(TrainingArguments):
         if self.gradient_checkpointing:
             self.gradient_checkpointing_kwargs = self.gradient_checkpointing_kwargs or {}
             self.gradient_checkpointing_kwargs["use_reentrant"] = False
+        if self.auto_find_batch_size and self.deepspeed:
+            raise ValueError(
+                f"Auto batch size finder is not supported with Deepseed because of bugs with model preparation: https://github.com/huggingface/transformers/issues/24558"
+            )
         super().__post_init__()
 
 
@@ -205,14 +209,44 @@ class OtherArguments:
 
 
 class HFTrainer(Trainer):
-    def _inner_training_loop(
-        self, batch_size=None, args=None, resume_from_checkpoint=None, trial=None, ignore_keys_for_eval=None
-    ):
-        # Hack to fix: https://github.com/huggingface/transformers/issues/24558
-        if self.args.auto_find_batch_size:
-            self.model_wrapped = self.model
-            self.deepspeed = None
-        return super()._inner_training_loop(batch_size, args, resume_from_checkpoint, trial, ignore_keys_for_eval)
+    pass
+    # def _inner_training_loop(
+    #     self, batch_size=None, args=None, resume_from_checkpoint=None, trial=None, ignore_keys_for_eval=None
+    # ):
+    #     # Hack to fix: https://github.com/huggingface/transformers/issues/24558
+    #     # Note: Use this with caution! If the GPU memory allocation is uneven then ranks might not agree on the same batch size and things hang
+    #     dist_s = DistributedState(world_size=self.args.world_size, local_rank=self.args.local_rank)
+    #     if self.args.auto_find_batch_size and self.args.deepspeed:
+    #         self.model_wrapped = self.model
+    #         self.deepspeed = None
+    #         self.accelerator.free_memory()
+    #         if torch.cuda.is_available():
+    #             torch.cuda.synchronize()
+    #         dist_s.wait_for_everyone()
+    #     return super()._inner_training_loop(batch_size, args, resume_from_checkpoint, trial, ignore_keys_for_eval)
+
+    # TODO: incomplete! To address the above issue where ranks can disagree on batch size, one way is we communicate across all ranks and sync the batch size forcefully
+    # def compute_loss(self, model, inputs, return_outputs=False):
+    #     from accelerate.utils.memory import should_reduce_batch_size
+    #     exc = None
+    #     dist_s = DistributedState(world_size=self.args.world_size, local_rank=self.args.local_rank)
+
+    #     try:
+    #         outputs = super().compute_loss(model, inputs, return_outputs)
+    #     except Exception as re:
+    #         if should_reduce_batch_size(re):
+    #             logger.info(f"CUDA OOM when trying {self._train_batch_size}. Crashing this rank!")
+    #             exc = re
+    #             # TODO: Inform other ranks to also crash if they haven't
+    #     dist_s.wait_for_everyone()
+    #     if not exc:
+    #         logger.info(f"Forward went fine with {self._train_batch_size}. Checking in with other ranks")
+    #         # TODO: Check other ranks if any of them has crashed and set exc is yes
+    #     dist_s.wait_for_everyone()
+    #     if exc:
+    #         raise exc
+
+    #     return outputs
 
 
 def get_torch_dtype(training_arguments: HFTrainingArguments):
@@ -404,7 +438,7 @@ def get_model(
         model_load_kwargs.pop("use_cache", None)
 
     if other_arguments.use_flash_attention:
-        model_load_kwargs["use_flash_attention_2"] = other_arguments.use_flash_attention
+        model_load_kwargs["attn_implementation"] = "flash_attention_2"
 
     if other_arguments.use_qlora:
         compute_dtype = get_torch_dtype(training_arguments)
@@ -428,6 +462,7 @@ def get_model(
             torch_dtype=torch_dtype,
             quantization_config=bnb_config,
             device_map=device_map,
+            low_cpu_mem_usage=True,
             **model_load_kwargs,
         )
         if dist_s.is_main_process:
@@ -445,6 +480,7 @@ def get_model(
             trust_remote_code=True,
             torch_dtype=get_torch_dtype(training_arguments),
             device_map=device_map,
+            low_cpu_mem_usage=True,
             **model_load_kwargs,
         )
 
@@ -733,7 +769,7 @@ def _train(
     #   (re-init is not a problem because resume_from_checkpoint in trainer should restore weights)
     #   However the layer updating code is broken that it does not move the layers to correct device.
     #   So you'll get base layers on gpu and lora layers on cpu crashing the code.
-    #   There is a massive refactor in peft which has mostly solved this but unreleased as of writing: https://github.com/huggingface/peft/commit/5a3a5acff2d679358251742564f7b12efbee3a41
+    #   There is a massive refactor in peft 0.7.0 which has mostly solved this but will need some time to migrate correctly
     #   So for now, we always load the base model from pretrained version, resize embeddings is tokenizer from checkpoint has more tokens, and re-apply the peft config from scratch
     model = get_model(
         model_source=other_arguments.model_id,  # This is not a bug
@@ -754,10 +790,6 @@ def _train(
             training_arguments=training_arguments,
             other_arguments=other_arguments,
         )
-
-    if torch.cuda.is_available():
-        torch.cuda.empty_cache()
-        torch.cuda.synchronize()
 
     logger.info("Training...")
     # TODO (chiragjn): Add text generation metrics to `compute_metrics
@@ -786,6 +818,12 @@ def _train(
         data_collator=SequenceDataCollator(tokenizer=tokenizer, multiple_of=other_arguments.pad_to_multiple_of),
         callbacks=callbacks,
     )
+
+    if torch.cuda.is_available():
+        torch.cuda.empty_cache()
+        torch.cuda.synchronize()
+
+    dist_s.wait_for_everyone()
 
     trainer.train(resume_from_checkpoint=last_checkpoint_dir)
 
