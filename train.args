@@ -27,4 +27,4 @@
 --ddp_backend nccl
 --ddp_timeout 21600
 --half_precision_backend auto
---auto_find_batch_size true
+--auto_find_batch_size false

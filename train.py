@@ -52,6 +52,7 @@ from mlfoundry_utils import MLFoundryCallback, log_model_to_mlfoundry
 #   - Add support to use Apex FusedAdam
 #   - Add support to push to HF Hub
 
+DEBUG_LOG_MODEL_PARAMETERS = os.getenv("DEBUG_LOG_MODEL_PARAMETERS")
 TFY_INTERNAL_JOB_NAME = os.getenv("TFY_INTERNAL_COMPONENT_NAME")
 TFY_INTERNAL_JOB_RUN_NAME = os.getenv("TFY_INTERNAL_JOB_RUN_NAME")
 THIS_DIR = os.path.abspath(os.path.dirname(__name__))
@@ -213,7 +214,7 @@ class HFTrainer(Trainer):
     # def _inner_training_loop(
     #     self, batch_size=None, args=None, resume_from_checkpoint=None, trial=None, ignore_keys_for_eval=None
     # ):
-    #     # Hack to fix: https://github.com/huggingface/transformers/issues/24558
+    #     # Hack to get around: https://github.com/huggingface/transformers/issues/24558
     #     # Note: Use this with caution! If the GPU memory allocation is uneven then ranks might not agree on the same batch size and things hang
     #     dist_s = DistributedState(world_size=self.args.world_size, local_rank=self.args.local_rank)
     #     if self.args.auto_find_batch_size and self.args.deepspeed:
@@ -333,9 +334,12 @@ def filter_trainer_args_for_logging(
 
 
 def _log_model_parameters(model):
+    global DEBUG_LOG_MODEL_PARAMETERS
+    if not DEBUG_LOG_MODEL_PARAMETERS:
+        return
     logger.info("=== Model Parameters ===")
     for name, parameter in model.named_parameters():
-        print("\t", name, parameter.dtype, parameter.device, parameter.requires_grad)
+        logger.info(f"\t {name}, {parameter.dtype}, {parameter.device}, {parameter.requires_grad}")
     logger.info("========================")
 
 
@@ -790,7 +794,6 @@ def _train(
             training_arguments=training_arguments,
             other_arguments=other_arguments,
         )
-
     logger.info("Training...")
     # TODO (chiragjn): Add text generation metrics to `compute_metrics
     callbacks = []
