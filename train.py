@@ -4,6 +4,7 @@ import logging
 import os
 import shutil
 import sys
+import tempfile
 import time
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
@@ -34,6 +35,7 @@ from transformers import (
     TrainingArguments,
     set_seed,
 )
+from transformers.training_args import ParallelMode
 from transformers.integrations.deepspeed import is_deepspeed_zero3_enabled
 from transformers.utils import WEIGHTS_NAME, is_torch_tf32_available
 from transformers.utils import logging as hf_logging_utils
@@ -44,12 +46,12 @@ from dist_utils import DistributedState
 from mlfoundry_utils import MLFoundryCallback, log_model_to_mlfoundry
 
 # TODO (chiragjn):
-#   - Try using deepspeed (with resume) for all 3 modes - qlora, lora and full
+#   - Test deepspeed with resume
 #   - Test and fix Deepspeed (Zero 3) weight gathering bugs during checkpointing if any
+#   - Invent some work around to use auto batch size finder with deepspeed
 #   - Add support for dataset packing
-#   - Find optimal combinations of batch_size, gradient accumulation, gradient checkpointing to get fastest training time in the given gpu budget
 #   - Add support for dataset streaming
-#   - Add support to use Apex FusedAdam
+#   - Add support to read dataset from HF
 #   - Add support to push to HF Hub
 
 DEBUG_LOG_MODEL_PARAMETERS = os.getenv("DEBUG_LOG_MODEL_PARAMETERS")
@@ -210,7 +212,13 @@ class OtherArguments:
 
 
 class HFTrainer(Trainer):
-    pass
+    def _wrap_model(self, model, training=True, dataloader=None):
+        outputs = super()._wrap_model(model=model, training=training, dataloader=dataloader)
+        if self.args.parallel_mode == ParallelMode.DISTRIBUTED and self.accelerator.ddp_handler and not self.args.deepspeed:
+            self.accelerator.ddp_handler.gradient_as_bucket_view = True
+
+        return outputs
+
     # def _inner_training_loop(
     #     self, batch_size=None, args=None, resume_from_checkpoint=None, trial=None, ignore_keys_for_eval=None
     # ):
@@ -312,7 +320,7 @@ def filter_trainer_args_for_logging(
         "use_lora": other_arguments.use_lora,
         "use_qlora": other_arguments.use_qlora,
     }
-    if other_arguments.use_lora:
+    if other_arguments.use_lora or other_arguments.use_qlora:
         lora_args = {
             "lora_r": other_arguments.lora_r,
             "lora_alpha": other_arguments.lora_alpha,
@@ -324,9 +332,9 @@ def filter_trainer_args_for_logging(
 
     if other_arguments.use_qlora:
         qlora_args = {
+            "qlora_bit_length": other_arguments.qlora_bit_length,
             "bnb_4bit_quant_type": other_arguments.bnb_4bit_quant_type,
             "use_double_quant": other_arguments.use_double_quant,
-            "qlora_bit_length": other_arguments.qlora_bit_length,
         }
         arguments.update(qlora_args)
 
@@ -347,10 +355,13 @@ def _maybe_set_custom_tempdir():
     # We make sure any custom tempdir set by setting `TMPDIR` or equivalent env variables exist
     _tempdir = os.getenv("TMPDIR")
     if _tempdir:
+        _tempdir = os.path.abspath(_tempdir)
         if os.path.exists(_tempdir) and os.path.isfile(_tempdir):
             raise ValueError("Current `TMPDIR` points to a file path, please set it to a directory path")
         else:
             os.makedirs(_tempdir, exist_ok=True)
+        if tempfile.gettempdir() != _tempdir:
+            tempfile.tempdir = _tempdir  # Not good, but necessary
 
 
 def _maybe_set_torch_max_memory(device: int):
@@ -398,8 +409,6 @@ def setup(training_arguments: HFTrainingArguments, other_arguments: OtherArgumen
     _maybe_set_torch_max_memory(device=training_arguments.local_rank)
 
     if other_arguments.use_flash_attention:
-        # if not (training_arguments.bf16 or training_arguments.fp16):
-        #     raise ValueError("--use_flash_attention requires either --bf16 or --fp16")
         import flash_attn as _
 
 
@@ -753,7 +762,6 @@ def _train(
         )
 
     no_of_gpus = torch.cuda.device_count() if torch.cuda.is_available() else 0
-    device_map = None
     if training_arguments.deepspeed:
         device_map = None
     elif other_arguments.use_ddp:
@@ -761,6 +769,8 @@ def _train(
             device_map = {"": "cuda:" + str(training_arguments.local_rank)}
         else:
             device_map = "auto"
+    else:
+        device_map = "auto"
 
     # TODO (chiragjn): Ideally we should be loading from checkpoint when available because we resize embeddings in some cases
     #   but because of device movement bugs with peft we are loading the pretrained model and re-applying peft config
@@ -785,7 +795,11 @@ def _train(
     # TODO (chiragjn): If there are new tokens added, check if we want grads to be enabled on embedding and lm head.
     #   prepare_model_for_k_bit actually disables grad on embedding and lm head
     if model.get_input_embeddings().num_embeddings < len(tokenizer):
-        logger.info("Resizing embeddings layer for newly added tokens")
+        logger.info(
+            f"Resizing embeddings layer for newly added tokens. "
+            f"Tokenizer length is {len(tokenizer)} but model embedding "
+            f"layer has {model.get_input_embeddings().num_embeddings}"
+        )
         model.resize_token_embeddings(len(tokenizer))
 
     if other_arguments.use_lora or other_arguments.use_qlora:
@@ -865,12 +879,8 @@ def train(training_arguments: HFTrainingArguments, other_arguments: OtherArgumen
         if not torch.cuda.is_available() or torch.cuda.device_count() < 1:
             raise RuntimeError("No GPUs detected. We need at least one gpu available for Lora/QLora finetuning!")
 
-    if other_arguments.use_lora:
-        # TODO (chiragjn): Support LoRA with deepspeed
-        if training_arguments.deepspeed:
-            raise ValueError(
-                "deepspeed is currently not supported with lora/qlora fine-tuning please try fine-tuning without deepspeed"
-            )
+    if other_arguments.use_flash_attention and not (training_arguments.bf16 or training_arguments.fp16):
+        raise ValueError("--use_flash_attention requires either --bf16 or --fp16")
 
     setup(training_arguments=training_arguments, other_arguments=other_arguments)
 

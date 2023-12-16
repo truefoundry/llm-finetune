@@ -31,7 +31,7 @@
       "sub_group_size": 1e9,
       "reduce_bucket_size": "auto",
       "allgather_partitions": true,
-      "allgather_bucket_size": 2e8,
+      "allgather_bucket_size": 5e8,
       "reduce_scatter": true,
       "round_robin_gradients": true
     },
