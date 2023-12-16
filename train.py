@@ -35,14 +35,13 @@ from transformers import (
     TrainingArguments,
     set_seed,
 )
-from transformers.training_args import ParallelMode
 from transformers.integrations.deepspeed import is_deepspeed_zero3_enabled
+from transformers.training_args import ParallelMode
 from transformers.utils import WEIGHTS_NAME, is_torch_tf32_available
 from transformers.utils import logging as hf_logging_utils
 
 from checkpoint_utils import cleanup_checkpoints, get_last_checkpoint_for_resume_if_any
 from data_utils import SequenceDataCollator, build_dataset, get_data
-from dist_utils import DistributedState
 from mlfoundry_utils import MLFoundryCallback, log_model_to_mlfoundry
 
 # TODO (chiragjn):
@@ -214,7 +213,11 @@ class OtherArguments:
 class HFTrainer(Trainer):
     def _wrap_model(self, model, training=True, dataloader=None):
         outputs = super()._wrap_model(model=model, training=training, dataloader=dataloader)
-        if self.args.parallel_mode == ParallelMode.DISTRIBUTED and self.accelerator.ddp_handler and not self.args.deepspeed:
+        if (
+            self.args.parallel_mode == ParallelMode.DISTRIBUTED
+            and self.accelerator.ddp_handler
+            and not self.args.deepspeed
+        ):
             self.accelerator.ddp_handler.gradient_as_bucket_view = True
 
         return outputs
@@ -224,7 +227,7 @@ class HFTrainer(Trainer):
     # ):
     #     # Hack to get around: https://github.com/huggingface/transformers/issues/24558
     #     # Note: Use this with caution! If the GPU memory allocation is uneven then ranks might not agree on the same batch size and things hang
-    #     dist_s = DistributedState(world_size=self.args.world_size, local_rank=self.args.local_rank)
+    #     dist_s = self.args.distributed_state
     #     if self.args.auto_find_batch_size and self.args.deepspeed:
     #         self.model_wrapped = self.model
     #         self.deepspeed = None
@@ -238,7 +241,7 @@ class HFTrainer(Trainer):
     # def compute_loss(self, model, inputs, return_outputs=False):
     #     from accelerate.utils.memory import should_reduce_batch_size
     #     exc = None
-    #     dist_s = DistributedState(world_size=self.args.world_size, local_rank=self.args.local_rank)
+    #     dist_s = self.args.distributed_state
 
     #     try:
     #         outputs = super().compute_loss(model, inputs, return_outputs)
@@ -440,10 +443,7 @@ def get_model(
     other_arguments: OtherArguments,
     device_map=None,
 ):
-    dist_s = DistributedState(
-        world_size=training_arguments.world_size,
-        local_rank=training_arguments.local_rank,
-    )
+    dist_s = training_arguments.distributed_state
     logger.info("Loading model...")
     model_load_kwargs = {}
     model_load_kwargs["use_cache"] = False if training_arguments.gradient_checkpointing else True
@@ -509,10 +509,7 @@ def get_peft_wrapped_model(
     _device_map=None,
     _checkpoint_dir: Optional[str] = None,
 ):
-    dist_s = DistributedState(
-        world_size=training_arguments.world_size,
-        local_rank=training_arguments.local_rank,
-    )
+    dist_s = training_arguments.distributed_state
     # if _checkpoint_dir:
     #     model = PeftModel.from_pretrained(
     #         model=model,
@@ -648,10 +645,7 @@ def dist_get_last_checkpoint_for_resume_if_any(
     other_arguments: OtherArguments,
 ):
     last_checkpoint_dir = None
-    dist_s = DistributedState(
-        world_size=training_arguments.world_size,
-        local_rank=training_arguments.local_rank,
-    )
+    dist_s = training_arguments.distributed_state
     last_checkpoint_info_path = os.path.join(CACHE_DIR, "last_checkpoint_info.json")
     if dist_s.is_main_process:
         last_checkpoint_dir = get_last_checkpoint_for_resume_if_any(
@@ -680,10 +674,7 @@ def dist_build_dataset(
     train_on_prompt: bool,
     training_arguments: HFTrainingArguments,
 ):
-    dist_s = DistributedState(
-        world_size=training_arguments.world_size,
-        local_rank=training_arguments.local_rank,
-    )
+    dist_s = training_arguments.distributed_state
     logger.info("Building dataset...")
     dataset_cache_path = os.path.join(CACHE_DIR, "dataset")
     if dist_s.is_main_process:
@@ -711,10 +702,7 @@ def _train(
     other_arguments: OtherArguments,
     run: Optional[mlfoundry.MlFoundryRun] = None,
 ):
-    dist_s = DistributedState(
-        world_size=training_arguments.world_size,
-        local_rank=training_arguments.local_rank,
-    )
+    dist_s = training_arguments.distributed_state
     set_seed(training_arguments.seed)
 
     if not dist_s.is_main_process:
@@ -867,10 +855,7 @@ def _train(
 
 
 def train(training_arguments: HFTrainingArguments, other_arguments: OtherArguments):
-    dist_s = DistributedState(
-        world_size=training_arguments.world_size,
-        local_rank=training_arguments.local_rank,
-    )
+    dist_s = training_arguments.distributed_state
     timestamp = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H-%M-%S")
     logger.info(f"Training Arguments: {training_arguments}")
     logger.info(f"Arguments: {other_arguments}")
