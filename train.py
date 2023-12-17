@@ -36,6 +36,7 @@ from transformers import (
     set_seed,
 )
 from transformers.integrations.deepspeed import is_deepspeed_zero3_enabled
+from transformers.integrations.integration_utils import TensorBoardCallback
 from transformers.training_args import ParallelMode
 from transformers.utils import WEIGHTS_NAME, is_torch_tf32_available
 from transformers.utils import logging as hf_logging_utils
@@ -43,6 +44,7 @@ from transformers.utils import logging as hf_logging_utils
 from checkpoint_utils import cleanup_checkpoints, get_last_checkpoint_for_resume_if_any
 from data_utils import SequenceDataCollator, build_dataset, get_data
 from mlfoundry_utils import MLFoundryCallback, log_model_to_mlfoundry
+from utils import ExtraMetricsCallback
 
 # TODO (chiragjn):
 #   - Test deepspeed with resume
@@ -53,7 +55,7 @@ from mlfoundry_utils import MLFoundryCallback, log_model_to_mlfoundry
 #   - Add support to read dataset from HF
 #   - Add support to push to HF Hub
 
-DEBUG_LOG_MODEL_PARAMETERS = os.getenv("DEBUG_LOG_MODEL_PARAMETERS")
+DEBUG = (os.getenv("DEBUG") or "").lower() == "true"
 TFY_INTERNAL_JOB_NAME = os.getenv("TFY_INTERNAL_COMPONENT_NAME")
 TFY_INTERNAL_JOB_RUN_NAME = os.getenv("TFY_INTERNAL_JOB_RUN_NAME")
 THIS_DIR = os.path.abspath(os.path.dirname(__name__))
@@ -345,8 +347,8 @@ def filter_trainer_args_for_logging(
 
 
 def _log_model_parameters(model):
-    global DEBUG_LOG_MODEL_PARAMETERS
-    if not DEBUG_LOG_MODEL_PARAMETERS:
+    global DEBUG
+    if not DEBUG:
         return
     logger.info("=== Model Parameters ===")
     for name, parameter in model.named_parameters():
@@ -798,7 +800,7 @@ def _train(
         )
     logger.info("Training...")
     # TODO (chiragjn): Add text generation metrics to `compute_metrics
-    callbacks = []
+    callbacks = [ExtraMetricsCallback(), TensorBoardCallback()]
     if run:
         callbacks.append(
             MLFoundryCallback(

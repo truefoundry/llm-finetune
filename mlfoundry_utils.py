@@ -114,7 +114,7 @@ def get_checkpoint_artifact_version_with_step_or_none(
 class MLFoundryCallback(TrainerCallback):
     def __init__(
         self,
-        run: Optional[mlfoundry.MlFoundryRun] = None,
+        run: mlfoundry.MlFoundryRun,
         log_checkpoints: bool = True,
         checkpoint_artifact_name: Optional[str] = None,
     ):
@@ -127,26 +127,7 @@ class MLFoundryCallback(TrainerCallback):
 
     # noinspection PyMethodOverriding
     def on_log(self, args, state, control, logs, model=None, **kwargs):
-        # TODO (chiragjn): Hack for now, needs to be moved to `compute_metrics`
-        #   unfortunately compute metrics does not give us already computed metrics like eval_loss
         if not state.is_world_process_zero:
-            return
-
-        for loss_key, perplexity_key in [
-            ("loss", "train_perplexity"),
-            ("eval_loss", "eval_perplexity"),
-        ]:
-            if loss_key in logs:
-                try:
-                    perplexity = math.exp(logs[loss_key])
-                except OverflowError:
-                    perplexity = float("inf")
-                    logger.warning(f"Encountered inf in eval perplexity, cannot log it as a metric")
-                logger.info(f"{perplexity_key}: {perplexity}")
-                logs[perplexity_key] = perplexity
-
-        logger.info(f"Metrics: {logs}")
-        if not self._run:
             return
 
         metrics = {}
@@ -169,7 +150,7 @@ class MLFoundryCallback(TrainerCallback):
         if not self._log_checkpoints:
             return
 
-        if not self._run or not self._checkpoint_artifact_name:
+        if not self._checkpoint_artifact_name:
             return
 
         ckpt_dir = f"checkpoint-{state.global_step}"
