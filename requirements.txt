@@ -2,7 +2,7 @@
 torch==2.1.1+cu118
 cloud-files==4.15.2
 mlfoundry==0.10.4
-transformers[accelerate,deepspeed,sentencepiece,tokenizers] @ git+https://github.com/huggingface/transformers.git@ebfdb9ca62205279d5019ef1403877461b3b2da4
+transformers[accelerate,deepspeed,sentencepiece,tokenizers]==4.36.2
 accelerate==0.25.0
 deepspeed==0.12.5
 datasets==2.14.7
