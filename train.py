@@ -1,3 +1,4 @@
+import contextlib
 import gc
 import json
 import logging
@@ -8,14 +9,13 @@ import tempfile
 import time
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
-from typing import Any, Dict, Optional, Union
+from typing import Any, Dict, Optional
 
 import bitsandbytes as bnb
 import mlfoundry
 import torch
 from accelerate import infer_auto_device_map, init_empty_weights
 from datasets import DatasetDict
-from deepspeed.utils.zero_to_fp32 import convert_zero_checkpoint_to_fp32_state_dict
 from peft import (
     AutoPeftModelForCausalLM,
     LoraConfig,
@@ -35,10 +35,14 @@ from transformers import (
     TrainingArguments,
     set_seed,
 )
-from transformers.integrations.deepspeed import is_deepspeed_zero3_enabled
+from transformers.integrations.deepspeed import (
+    is_deepspeed_zero3_enabled,
+    set_hf_deepspeed_config,
+    unset_hf_deepspeed_config,
+)
 from transformers.integrations.integration_utils import TensorBoardCallback
 from transformers.training_args import ParallelMode
-from transformers.utils import WEIGHTS_NAME, is_torch_tf32_available
+from transformers.utils import is_torch_tf32_available
 from transformers.utils import logging as hf_logging_utils
 
 from checkpoint_utils import cleanup_checkpoints, get_last_checkpoint_for_resume_if_any
@@ -65,7 +69,6 @@ TFY_INTERNAL_JOB_NAME = os.getenv("TFY_INTERNAL_COMPONENT_NAME")
 TFY_INTERNAL_JOB_RUN_NAME = os.getenv("TFY_INTERNAL_JOB_RUN_NAME")
 THIS_DIR = os.path.abspath(os.path.dirname(__name__))
 CACHE_DIR = os.path.join(THIS_DIR, ".cache")
-EXPORT_ZERO3_CHECKPOINT_TO_FP32 = False
 logger = logging.getLogger("truefoundry-finetune")
 
 
@@ -452,8 +455,10 @@ def get_model(
 ):
     dist_s = training_arguments.distributed_state
     logger.info("Loading model...")
-    model_load_kwargs = {}
-    model_load_kwargs["use_cache"] = False if training_arguments.gradient_checkpointing else True
+    model_load_kwargs = {
+        "low_cpu_mem_usage": True,
+        "use_cache": False if training_arguments.gradient_checkpointing else True,
+    }
     if model_config.architectures and model_config.architectures[0] == "PhiForCausalLM":
         model_load_kwargs.pop("use_cache", None)
 
@@ -482,7 +487,6 @@ def get_model(
             torch_dtype=torch_dtype,
             quantization_config=bnb_config,
             device_map=device_map,
-            low_cpu_mem_usage=True,
             **model_load_kwargs,
         )
         if dist_s.is_main_process:
@@ -495,12 +499,13 @@ def get_model(
         # TODO (chiragjn): This is disabled because resuming does not work: https://github.com/TimDettmers/bitsandbytes/issues/782
         # training_arguments.optim = "paged_adamw_32bit"
     else:
+        if training_arguments.deepspeed and is_deepspeed_zero3_enabled:
+            model_load_kwargs.pop("low_cpu_mem_usage", None)
         model = AutoModelForCausalLM.from_pretrained(
             model_source,
             trust_remote_code=True,
             torch_dtype=get_torch_dtype(training_arguments),
             device_map=device_map,
-            low_cpu_mem_usage=True,
             **model_load_kwargs,
         )
 
@@ -631,13 +636,27 @@ def get_max_length(max_length, tokenizer, model_config):
     return max_length
 
 
+@contextlib.contextmanager
+def temporarily_disable_deepspeed_zero3(training_arguments: HFTrainingArguments):
+    if training_arguments.deepspeed and is_deepspeed_zero3_enabled():
+        unset_hf_deepspeed_config()
+        yield
+        set_hf_deepspeed_config(training_arguments.hf_deepspeed_config)
+    else:
+        yield
+
+
 def check_if_model_will_fit_only_with_gpus(
     training_arguments: HFTrainingArguments,
     other_arguments: OtherArguments,
 ):
-    config = AutoConfig.from_pretrained(other_arguments.model_id, trust_remote_code=True)
     with init_empty_weights():
-        model = AutoModelForCausalLM.from_config(config, trust_remote_code=True)
+        model = AutoModelForCausalLM.from_pretrained(
+            other_arguments.model_id,
+            trust_remote_code=True,
+            low_cpu_mem_usage=True,
+            torch_dtype=get_torch_dtype(training_arguments),
+        )
     device_map = infer_auto_device_map(model, dtype=get_torch_dtype(training_arguments))
     logger.info(f"Inferred device_map for auto settings: {device_map}")
     if any(not isinstance(v, int) for v in device_map.values()):
@@ -710,6 +729,7 @@ def _train(
     run: Optional[mlfoundry.MlFoundryRun] = None,
 ):
     dist_s = training_arguments.distributed_state
+    dist_s.wait_for_everyone()
     set_seed(training_arguments.seed)
 
     if not dist_s.is_main_process:
@@ -842,21 +862,12 @@ def _train(
     dist_s.wait_for_everyone()
 
     logger.info("Saving model...")
-    if training_arguments.deepspeed and is_deepspeed_zero3_enabled() and EXPORT_ZERO3_CHECKPOINT_TO_FP32:
-        # TODO (chiragjn): Disabled for now. Test and Re-enable, check the half precision format
-        #  Under ZeRO 3, when checkpointing, each rank saves their own part, in zero format
-        #  if "stage3_gather_16bit_weights_on_model_save": true,
-        #  then an additional pytorch_model.bin is saved as a 16-bit checkpoint
-        #  if we want fp32 pytorch_model.bin then we would have to export separately from the checkpoint in zero format
-        trainer.save_model(output_dir=training_arguments.output_dir)
-        if dist_s.is_main_process:
-            fp32_weights_path = os.path.join(training_arguments.output_dir, WEIGHTS_NAME)
-            convert_zero_checkpoint_to_fp32_state_dict(trainer.state.best_model_checkpoint, fp32_weights_path)
-            cleanup_checkpoints(output_dir=training_arguments.output_dir)
-    else:
-        if dist_s.is_main_process:
-            cleanup_checkpoints(output_dir=training_arguments.output_dir)
-        trainer.save_model(output_dir=training_arguments.output_dir)
+    if dist_s.is_main_process:
+        cleanup_checkpoints(output_dir=training_arguments.output_dir)
+
+    dist_s.wait_for_everyone()
+
+    trainer.save_model(output_dir=training_arguments.output_dir)
 
     dist_s.wait_for_everyone()
 
@@ -872,15 +883,6 @@ def train(training_arguments: HFTrainingArguments, other_arguments: OtherArgumen
             raise RuntimeError("No GPUs detected. We need at least one gpu available for Lora/QLora finetuning!")
         if training_arguments.deepspeed and is_deepspeed_zero3_enabled():
             raise ValueError("Deepspeed Zero 3 is currently not supported with QLoRa")
-
-    if other_arguments.use_lora:
-        if training_arguments.deepspeed and is_deepspeed_zero3_enabled():
-            # TODO (chiragjn): Remove this limitation
-            # Deepspeed Zero 3 causes the check_if_model_will_fit_only_with_gpus to fail
-            # We also cannot guarantee we will have enough GPU to merge adapters
-            # in that case we should not do the gpu fit check and just merge adapters on cpu
-            # The code can be made much cleaner if we separate out model/checkpoint downloading + data processing, training, merging + logging model
-            raise ValueError("Deepspeed Zero 3 is currently not supported with LoRa")
 
     if other_arguments.use_flash_attention and not (training_arguments.bf16 or training_arguments.fp16):
         raise ValueError("--use_flash_attention requires either --bf16 or --fp16")
@@ -930,9 +932,10 @@ def train(training_arguments: HFTrainingArguments, other_arguments: OtherArgumen
 
     if dist_s.is_main_process:
         if other_arguments.use_lora or other_arguments.use_qlora:
-            check_if_model_will_fit_only_with_gpus(
-                training_arguments=training_arguments, other_arguments=other_arguments
-            )
+            with temporarily_disable_deepspeed_zero3(training_arguments):
+                check_if_model_will_fit_only_with_gpus(
+                    training_arguments=training_arguments, other_arguments=other_arguments
+                )
 
     _train(
         training_arguments=training_arguments,
@@ -943,7 +946,8 @@ def train(training_arguments: HFTrainingArguments, other_arguments: OtherArgumen
 
     if dist_s.is_main_process:
         if other_arguments.use_lora or other_arguments.use_qlora:
-            merge_adapters_if_any(training_arguments=training_arguments, other_arguments=other_arguments)
+            with temporarily_disable_deepspeed_zero3(training_arguments):
+                merge_adapters_if_any(training_arguments=training_arguments, other_arguments=other_arguments)
 
     if dist_s.is_main_process and run:
         *_, model_name = other_arguments.model_id.rsplit("/", 1)
