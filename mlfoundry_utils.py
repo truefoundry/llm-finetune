@@ -1,8 +1,10 @@
 import logging
 import math
 import os
+import random
 import re
 import shutil
+import string
 from typing import Any, Dict, Optional
 
 import mlfoundry
@@ -170,3 +172,30 @@ class MLFoundryCallback(TrainerCallback):
             step=state.global_step,
             description=description,
         )
+
+
+def sanitize_name(value):
+    return re.sub(rf"[{re.escape(string.punctuation)}]+", "-", value.encode("ascii", "ignore").decode("utf-8"))
+
+
+def generate_run_name(model_id):
+    *_, model_name = model_id.split("/", 1)
+    sanitized_model_name = sanitize_name(model_name)
+    alphabet = string.ascii_lowercase + string.digits
+    random.choices(alphabet, k=8)
+    random_id = random.choices(alphabet, k=6)
+    run_name = f"ft-{sanitized_model_name}-{random_id}"
+    return run_name
+
+
+def get_or_create_run(ml_repo: str, run_name: str, auto_end: bool = False, create_ml_repo: bool = False):
+    client = mlfoundry.get_client()
+    if create_ml_repo:
+        client.create_ml_repo(ml_repo=ml_repo)
+    try:
+        run = client.get_run_by_name(ml_repo=ml_repo, run_name=run_name, auto_end=auto_end)
+    except Exception as e:
+        if "RESOURCE_DOES_NOT_EXIST" not in str(e):
+            raise
+        run = client.create_run(ml_repo=ml_repo, run_name=run_name, auto_end=auto_end)
+    return run

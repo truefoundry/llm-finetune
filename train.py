@@ -43,7 +43,12 @@ from transformers.utils import logging as hf_logging_utils
 
 from checkpoint_utils import cleanup_checkpoints, get_last_checkpoint_for_resume_if_any
 from data_utils import SequenceDataCollator, build_dataset, get_data
-from mlfoundry_utils import MLFoundryCallback, log_model_to_mlfoundry
+from mlfoundry_utils import (
+    MLFoundryCallback,
+    get_or_create_run,
+    log_model_to_mlfoundry,
+    sanitize_name,
+)
 from utils import ExtraMetricsCallback
 
 # TODO (chiragjn):
@@ -884,28 +889,30 @@ def train(training_arguments: HFTrainingArguments, other_arguments: OtherArgumen
 
     run = None
     if dist_s.is_main_process and other_arguments.mlfoundry_enable_reporting:
-        mlfoundry_client = mlfoundry.get_client()
         if not other_arguments.mlfoundry_run_name:
-            fallback_run_name = f"finetune-{timestamp}"
+            if TFY_INTERNAL_JOB_RUN_NAME:
+                fallback_run_name = f"finetune-{sanitize_name(TFY_INTERNAL_JOB_RUN_NAME)}"
+            else:
+                fallback_run_name = f"finetune-{timestamp}"
             logger.info(f"Setting --mlfoundry_run_name automatically to {fallback_run_name}")
             other_arguments.mlfoundry_run_name = fallback_run_name
-        run = mlfoundry_client.create_run(
+
+        run = get_or_create_run(
             ml_repo=other_arguments.mlfoundry_ml_repo,
             run_name=other_arguments.mlfoundry_run_name,
+            auto_end=False,
+            create_ml_repo=False,
         )
-
-        if not other_arguments.mlfoundry_checkpoint_artifact_name:
-            if TFY_INTERNAL_JOB_RUN_NAME:
-                mlfoundry_checkpoint_artifact_name = f"checkpoint-{TFY_INTERNAL_JOB_RUN_NAME}"
+        if other_arguments.mlfoundry_log_checkpoints:
+            if not other_arguments.mlfoundry_checkpoint_artifact_name:
+                if TFY_INTERNAL_JOB_RUN_NAME:
+                    mlfoundry_checkpoint_artifact_name = f"ckpt-{sanitize_name(TFY_INTERNAL_JOB_RUN_NAME)}"
+                else:
+                    mlfoundry_checkpoint_artifact_name = f"ckpt-{run.run_name}"
                 logger.info(
                     f"Setting --mlfoundry_checkpoint_artifact_name automatically to {mlfoundry_checkpoint_artifact_name}"
                 )
                 other_arguments.mlfoundry_checkpoint_artifact_name = mlfoundry_checkpoint_artifact_name
-
-        if other_arguments.mlfoundry_log_checkpoints and not other_arguments.mlfoundry_checkpoint_artifact_name:
-            raise ValueError(
-                "--mlfoundry_log_checkpoints was set to true but --mlfoundry_checkpoint_artifact_name is either unset or cannot be automatically decided. Please set it explicitly"
-            )
 
         run.log_params(vars(other_arguments), flatten_params=True)
         run.log_params(
@@ -941,7 +948,7 @@ def train(training_arguments: HFTrainingArguments, other_arguments: OtherArgumen
     if dist_s.is_main_process and run:
         *_, model_name = other_arguments.model_id.rsplit("/", 1)
         model_name = "-".join(["finetuned", model_name, timestamp])
-        model_name = model_name.replace(".", "-")
+        model_name = sanitize_name(model_name)
         cleanup_checkpoints(output_dir=training_arguments.output_dir)
         log_model_to_mlfoundry(
             run=run,
