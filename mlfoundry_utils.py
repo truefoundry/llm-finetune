@@ -183,7 +183,7 @@ def generate_run_name(model_id):
     sanitized_model_name = sanitize_name(model_name)
     alphabet = string.ascii_lowercase + string.digits
     random.choices(alphabet, k=8)
-    random_id = random.choices(alphabet, k=6)
+    random_id = "".join(random.choices(alphabet, k=6))
     run_name = f"ft-{sanitized_model_name}-{random_id}"
     return run_name
 
@@ -193,7 +193,7 @@ def get_or_create_run(ml_repo: str, run_name: str, auto_end: bool = False, creat
     if create_ml_repo:
         client.create_ml_repo(ml_repo=ml_repo)
     try:
-        run = client.get_run_by_name(ml_repo=ml_repo, run_name=run_name, auto_end=auto_end)
+        run = client.get_run_by_name(ml_repo=ml_repo, run_name=run_name)
     except Exception as e:
         if "RESOURCE_DOES_NOT_EXIST" not in str(e):
             raise
