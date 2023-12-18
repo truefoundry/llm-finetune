@@ -1,8 +1,10 @@
 FROM truefoundrycloud/jupyter:0.2.8-sudo
 ENV TORCH_CUDA_ARCH_LIST="7.0 7.5 8.0 8.6 9.0+PTX"
+ENV DEBIAN_FRONTEND=noninteractive
 USER root
 # Install CUDA 11.8
-RUN apt update && \
+RUN sudo add-apt-repository ppa:flexiondotorg/nvtop -y && \
+    apt update && \
     apt install -y --no-install-recommends git curl wget htop nvtop && \
     wget https://developer.download.nvidia.com/compute/cuda/repos/ubuntu2004/x86_64/cuda-keyring_1.1-1_all.deb -O /tmp/cuda-keyring_1.1-1_all.deb && \
     dpkg -i /tmp/cuda-keyring_1.1-1_all.deb && \
