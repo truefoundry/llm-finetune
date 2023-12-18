@@ -865,6 +865,17 @@ def train(training_arguments: HFTrainingArguments, other_arguments: OtherArgumen
     if other_arguments.use_qlora:
         if not torch.cuda.is_available() or torch.cuda.device_count() < 1:
             raise RuntimeError("No GPUs detected. We need at least one gpu available for Lora/QLora finetuning!")
+        if training_arguments.deepspeed and is_deepspeed_zero3_enabled():
+            raise ValueError("Deepspeed Zero 3 is currently not supported with QLoRa")
+
+    if other_arguments.use_lora:
+        if training_arguments.deepspeed and is_deepspeed_zero3_enabled():
+            # TODO (chiragjn): Remove this limitation
+            # Deepspeed Zero 3 causes the check_if_model_will_fit_only_with_gpus to fail
+            # We also cannot guarantee we will have enough GPU to merge adapters
+            # in that case we should not do the gpu fit check and just merge adapters on cpu
+            # The code can be made much cleaner if we separate out model/checkpoint downloading + data processing, training, merging + logging model
+            raise ValueError("Deepspeed Zero 3 is currently not supported with LoRa")
 
     if other_arguments.use_flash_attention and not (training_arguments.bf16 or training_arguments.fp16):
         raise ValueError("--use_flash_attention requires either --bf16 or --fp16")

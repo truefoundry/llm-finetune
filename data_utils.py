@@ -107,6 +107,8 @@ def load_data(path, max_num_samples: Optional[int] = None):
             logger.info(f"Loading data from snowflake db ...")
             lines = get_data_from_snowflake_table(uri=path, max_num_samples=max_num_samples)
         else:
+            if not path.startswith("file://") and os.path.exists(path):
+                path = f"file://{os.path.abspath(path)}"
             logger.info(f"Loading data from link: {path}")
             lines = _read_lines_from_cloudfile(path)
         for line_no, line in enumerate(lines, start=1):
@@ -249,6 +251,8 @@ def build_dataset(
     max_length: int,
     train_on_prompt: bool,
 ):
+    # TODO (chiragjn): This should not be loading the entire dataset in memory all at once. Make this streaming
+    # TODO (chiragjn): Add dataset packing to increase training efficiency
     builder = CausalDatasetBuilder(tokenizer=tokenizer, max_length=max_length, train_on_prompt=train_on_prompt)
     dataset_dict = DatasetDict(train=Dataset.from_list(train_data), eval=Dataset.from_list(eval_data))
     # TODO (chiragjn): Read cpu limits from cgroup, cpu_count is not usable in containers environment

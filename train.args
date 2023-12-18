@@ -27,6 +27,6 @@
 --ddp_backend nccl
 --ddp_timeout 21600
 --half_precision_backend auto
---auto_find_batch_size false
+--auto_find_batch_size true
 --adam_beta1 0.9
 --adam_beta2 0.95

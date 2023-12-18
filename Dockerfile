@@ -1,7 +1,7 @@
 FROM --platform=linux/amd64 mambaorg/micromamba:1.5.3-jammy
 USER root
 RUN apt update && \
-    apt install -y git gcc g++ && \
+    apt install -y --no-install-recommends curl wget git gcc g++ && \
     rm -rf /var/lib/apt/lists/*
 RUN micromamba install -y -c "nvidia/label/cuda-11.8.0" cuda-nvcc cuda-libraries-dev -n base && \
     micromamba install -y -c "conda-forge" python=3.10 -n base && \
