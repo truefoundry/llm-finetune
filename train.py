@@ -637,7 +637,7 @@ def get_max_length(max_length, tokenizer, model_config):
 
 
 @contextlib.contextmanager
-def temporarily_disable_deepspeed_zero3(training_arguments: HFTrainingArguments):
+def deepspeed_zero3_disabled(training_arguments: HFTrainingArguments):
     if training_arguments.deepspeed and is_deepspeed_zero3_enabled():
         unset_hf_deepspeed_config()
         yield
@@ -932,7 +932,7 @@ def train(training_arguments: HFTrainingArguments, other_arguments: OtherArgumen
 
     if dist_s.is_main_process:
         if other_arguments.use_lora or other_arguments.use_qlora:
-            with temporarily_disable_deepspeed_zero3(training_arguments):
+            with deepspeed_zero3_disabled(training_arguments):
                 check_if_model_will_fit_only_with_gpus(
                     training_arguments=training_arguments, other_arguments=other_arguments
                 )
@@ -946,7 +946,7 @@ def train(training_arguments: HFTrainingArguments, other_arguments: OtherArgumen
 
     if dist_s.is_main_process:
         if other_arguments.use_lora or other_arguments.use_qlora:
-            with temporarily_disable_deepspeed_zero3(training_arguments):
+            with deepspeed_zero3_disabled(training_arguments):
                 merge_adapters_if_any(training_arguments=training_arguments, other_arguments=other_arguments)
 
     if dist_s.is_main_process and run:
