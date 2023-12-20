@@ -1,11 +1,13 @@
 import copy
 import json
 import logging
+import math
 import os
 import tempfile
-from typing import Optional
+from typing import NamedTuple, Optional
 from urllib.parse import parse_qsl, urlparse
 
+import numpy as np
 import torch
 from cloudfiles import CloudFile
 from datasets import Dataset, DatasetDict
@@ -18,6 +20,10 @@ logger = logging.getLogger("truefoundry-finetune")
 PROMPT_KEY = "prompt"
 COMPLETION_KEY = "completion"
 IGNORE_INDEX = -100  # -100 is the default ignore index in CrossEntropyLoss
+
+UNTRUNCATED_PROMPT_LENGTHS_KEY = "untruncated_prompt_lengths"
+UNTRUNCATED_COMPLETION_LENGTHS_KEY = "untruncated_completion_lengths"
+UNTRUNCATED_TOTAL_LENGTHS_KEY = "untruncated_total_lengths"
 
 
 class DataValidationException(Exception):
@@ -171,7 +177,7 @@ class DatasetBuilder:
         self.tokenizer = tokenizer
         self.max_length = max_length
 
-    def batch_tokenize(self, texts):
+    def batch_tokenize(self, texts, truncation=True):
         """Tokenizes text. Presently doesn't pad inputs, just returns input ids."""
         tokenized = [
             self.tokenizer(
@@ -179,7 +185,7 @@ class DatasetBuilder:
                 return_tensors="pt",
                 padding="longest",
                 max_length=self.max_length,
-                truncation=True,
+                truncation=truncation,
             ).input_ids
             for text in texts
         ]
@@ -199,17 +205,32 @@ class CausalDatasetBuilder(DatasetBuilder):
         self.train_on_prompt = train_on_prompt
 
     def construct_dataset(self, input_batch):
+        tokenized_prompts = self.batch_tokenize(input_batch[PROMPT_KEY], truncation=False)
+        tokenized_completion = self.batch_tokenize(input_batch[COMPLETION_KEY], truncation=False)
+        untruncated_prompt_lens = [ids.shape[1] for ids in tokenized_prompts]
+        # This will include bos, but that's okay, for counting sake we can count it as eos
+        untruncated_completion_lens = [ids.shape[1] for ids in tokenized_completion]
+        untruncated_total_lens = [p + c for p, c in zip(untruncated_prompt_lens, untruncated_completion_lens)]
+
         labels = []
         for prompt, completion in zip(input_batch[PROMPT_KEY], input_batch[COMPLETION_KEY]):
             labels.append(prompt + "\n" + completion + self.tokenizer.eos_token)
         input_ids = [val.squeeze() for val in self.batch_tokenize(labels)]
         labels = copy.deepcopy(input_ids)
         if not self.train_on_prompt:
+            # Masking for loss computation
             tokenized_prompts = self.batch_tokenize(input_batch[PROMPT_KEY])
-            prompt_lens = [val.shape[1] for val in tokenized_prompts]
+            prompt_lens = [ids.shape[1] for ids in tokenized_prompts]
             for label, source_len in zip(labels, prompt_lens):
                 label[:source_len] = IGNORE_INDEX
-        return {"input_ids": input_ids, "labels": labels}
+
+        return {
+            "input_ids": input_ids,
+            "labels": labels,
+            UNTRUNCATED_PROMPT_LENGTHS_KEY: untruncated_prompt_lens,
+            UNTRUNCATED_COMPLETION_LENGTHS_KEY: untruncated_completion_lens,
+            UNTRUNCATED_TOTAL_LENGTHS_KEY: untruncated_total_lens,
+        }
 
 
 class SequenceDataCollator:
@@ -244,6 +265,33 @@ class SequenceDataCollator:
         )
 
 
+class DatasetInfo(NamedTuple):
+    train_max_prompt_length: int
+    train_max_completion_length: int
+    train_max_total_length: int
+    eval_max_prompt_length: int
+    eval_max_completion_length: int
+    eval_max_total_length: int
+
+
+def _plot_ascii_lengths_histogram(data, title):
+    max_value = max(data)
+    bucket_width = 512
+    bins = np.arange(0, max_value + bucket_width, bucket_width)
+    histogram, _ = np.histogram(data, bins=bins)
+    top = " ".join(("-" * 10, title, "-" * 10))
+    bottom = "-" * len(top)
+    logger.info(top)
+    scale_factor = 40 / max(histogram)
+    for i, value in enumerate(histogram):
+        lower_bound = i * bucket_width
+        upper_bound = (i + 1) * bucket_width - 1
+        bar = "□" * int(value * scale_factor)
+        logger.info(f"{bar} ({lower_bound}-{upper_bound} tokens, Count: {value})")
+    logger.info(bottom)
+    logger.info("\n")
+
+
 def build_dataset(
     train_data,
     eval_data,
@@ -263,6 +311,33 @@ def build_dataset(
         remove_columns=[PROMPT_KEY, COMPLETION_KEY],
         batched=True,
         batch_size=32,
-        num_proc=num_proc,
+        num_proc=None,
     )
-    return dataset_dict
+
+    # --- Dataset Info ---
+    tupl = dataset_dict["train"][UNTRUNCATED_PROMPT_LENGTHS_KEY]
+    tucl = dataset_dict["train"][UNTRUNCATED_COMPLETION_LENGTHS_KEY]
+    tutl = dataset_dict["train"][UNTRUNCATED_TOTAL_LENGTHS_KEY]
+    eupl = dataset_dict["eval"][UNTRUNCATED_PROMPT_LENGTHS_KEY]
+    eucl = dataset_dict["eval"][UNTRUNCATED_COMPLETION_LENGTHS_KEY]
+    eutl = dataset_dict["eval"][UNTRUNCATED_TOTAL_LENGTHS_KEY]
+    dataset_info = DatasetInfo(
+        train_max_prompt_length=max(tupl),
+        train_max_completion_length=max(tucl),
+        train_max_total_length=max(tutl),
+        eval_max_prompt_length=max(eupl),
+        eval_max_completion_length=max(eucl),
+        eval_max_total_length=max(eutl),
+    )
+    _plot_ascii_lengths_histogram(tupl, title="Train Prompt Lengths Distribution")
+    _plot_ascii_lengths_histogram(tucl, title="Train Completion Lengths Distribution")
+    _plot_ascii_lengths_histogram(tutl, title="Train Total Lengths Distribution")
+    _plot_ascii_lengths_histogram(eupl, title="Eval Prompt Lengths Distribution")
+    _plot_ascii_lengths_histogram(eucl, title="Eval Completion Lengths Distribution")
+    _plot_ascii_lengths_histogram(eutl, title="Eval Total Lengths Distribution")
+    dataset_dict.remove_columns(
+        [UNTRUNCATED_PROMPT_LENGTHS_KEY, UNTRUNCATED_COMPLETION_LENGTHS_KEY, UNTRUNCATED_TOTAL_LENGTHS_KEY]
+    )
+    # --- Dataset Info ---
+
+    return dataset_dict, dataset_info
