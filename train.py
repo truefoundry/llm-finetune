@@ -7,13 +7,11 @@ import shutil
 import sys
 import tempfile
 import time
-import weakref
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from typing import Any, Dict, Optional
 
 import bitsandbytes as bnb
-import deepspeed
 import mlfoundry
 import torch
 from accelerate import infer_auto_device_map, init_empty_weights
@@ -55,6 +53,7 @@ from mlfoundry_utils import (
     log_model_to_mlfoundry,
     sanitize_name,
 )
+from monkey_patch import patched_deepspeed_load_checkpoint
 from utils import ExtraMetricsCallback, get_gpu_metrics
 
 # TODO (chiragjn):
@@ -233,44 +232,6 @@ class HFTrainer(Trainer):
             self.accelerator.ddp_handler.gradient_as_bucket_view = True
 
         return outputs
-
-    # def _inner_training_loop(
-    #     self, batch_size=None, args=None, resume_from_checkpoint=None, trial=None, ignore_keys_for_eval=None
-    # ):
-    #     # Hack to get around: https://github.com/huggingface/transformers/issues/24558
-    #     # Note: Use this with caution! If the GPU memory allocation is uneven then ranks might not agree on the same batch size and things hang
-    #     dist_s = self.args.distributed_state
-    #     if self.args.auto_find_batch_size and self.args.deepspeed:
-    #         self.model_wrapped = self.model
-    #         self.deepspeed = None
-    #         self.accelerator.free_memory()
-    #         if torch.cuda.is_available():
-    #             torch.cuda.synchronize()
-    #         dist_s.wait_for_everyone()
-    #     return super()._inner_training_loop(batch_size, args, resume_from_checkpoint, trial, ignore_keys_for_eval)
-
-    # TODO: incomplete! To address the above issue where ranks can disagree on batch size, one way is we communicate across all ranks and sync the batch size forcefully
-    # def compute_loss(self, model, inputs, return_outputs=False):
-    #     from accelerate.utils.memory import should_reduce_batch_size
-    #     exc = None
-    #     dist_s = self.args.distributed_state
-
-    #     try:
-    #         outputs = super().compute_loss(model, inputs, return_outputs)
-    #     except Exception as re:
-    #         if should_reduce_batch_size(re):
-    #             logger.info(f"CUDA OOM when trying {self._train_batch_size}. Crashing this rank!")
-    #             exc = re
-    #             # TODO: Inform other ranks to also crash if they haven't
-    #     dist_s.wait_for_everyone()
-    #     if not exc:
-    #         logger.info(f"Forward went fine with {self._train_batch_size}. Checking in with other ranks")
-    #         # TODO: Check other ranks if any of them has crashed and set exc is yes
-    #     dist_s.wait_for_everyone()
-    #     if exc:
-    #         raise exc
-
-    #     return outputs
 
 
 def get_torch_dtype(training_arguments: HFTrainingArguments):
@@ -471,8 +432,7 @@ def get_model(
         model_load_kwargs.pop("use_cache", None)
 
     if other_arguments.use_flash_attention:
-        # model_load_kwargs["attn_implementation"] = "flash_attention_2"
-        model_load_kwargs["use_flash_attention_2"] = True
+        model_load_kwargs["attn_implementation"] = "flash_attention_2"
 
     if other_arguments.use_qlora:
         compute_dtype = get_torch_dtype(training_arguments)
@@ -882,7 +842,11 @@ def _train(
         torch.cuda.synchronize()
 
     dist_s.wait_for_everyone()
-    trainer.train(resume_from_checkpoint=last_checkpoint_dir)
+    if hasattr(trainer, "deepspeed"):
+        with patched_deepspeed_load_checkpoint():
+            trainer.train(resume_from_checkpoint=last_checkpoint_dir)
+    else:
+        trainer.train(resume_from_checkpoint=last_checkpoint_dir)
     dist_s.wait_for_everyone()
 
     logger.info("Saving model...")
@@ -892,6 +856,9 @@ def _train(
     dist_s.wait_for_everyone()
     trainer.save_model(output_dir=training_arguments.output_dir)
     dist_s.wait_for_everyone()
+
+    if hasattr(trainer, "deepspeed") and hasattr(trainer.deepspeed, "destroy"):
+        trainer.deepspeed.destroy()
     trainer.accelerator.free_memory()
     dist_s.wait_for_everyone()
 
@@ -968,12 +935,6 @@ def train(training_arguments: HFTrainingArguments, other_arguments: OtherArgumen
         run=run,
     )
     logger.info(get_gpu_metrics())
-
-    # TODO (chiragjn): Currently tranining with Deepspeed is risky because it does not free up memory correctly
-    # See: https://github.com/microsoft/DeepSpeed/issues/4856
-    if training_arguments.deepspeed:
-        deepspeed.utils.debug.module_names = {}
-        deepspeed.utils.debug.param_names = {}
 
     if other_arguments.use_lora or other_arguments.use_qlora:
         _cleanup_gpus()
