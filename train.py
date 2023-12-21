@@ -10,6 +10,8 @@ import time
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from typing import Any, Dict, Optional
+import weakref
+import deepspeed
 
 import bitsandbytes as bnb
 import mlfoundry
@@ -54,6 +56,7 @@ from mlfoundry_utils import (
     sanitize_name,
 )
 from utils import ExtraMetricsCallback, get_gpu_metrics
+
 
 # TODO (chiragjn):
 #   - Test deepspeed with resume
@@ -469,7 +472,8 @@ def get_model(
         model_load_kwargs.pop("use_cache", None)
 
     if other_arguments.use_flash_attention:
-        model_load_kwargs["attn_implementation"] = "flash_attention_2"
+        # model_load_kwargs["attn_implementation"] = "flash_attention_2"
+        model_load_kwargs["use_flash_attention_2"] = True
 
     if other_arguments.use_qlora:
         compute_dtype = get_torch_dtype(training_arguments)
@@ -743,6 +747,13 @@ def dist_build_dataset(
     return train_dataset, eval_dataset
 
 
+_param_weak_refs = []
+def _setup_weak_refs(model):
+    global _param_weak_refs
+    for name, param in model.named_parameters():
+        _param_weak_refs.append((name, weakref.ref(param)))
+
+
 def _train(
     *,
     training_arguments: HFTrainingArguments,
@@ -879,19 +890,21 @@ def _train(
         torch.cuda.synchronize()
 
     dist_s.wait_for_everyone()
-
     trainer.train(resume_from_checkpoint=last_checkpoint_dir)
-
     dist_s.wait_for_everyone()
+
+    if dist_s.is_main_process:
+        _setup_weak_refs(trainer.model)
 
     logger.info("Saving model...")
     if dist_s.is_main_process:
         cleanup_checkpoints(output_dir=training_arguments.output_dir)
-
+    
+    dist_s.wait_for_everyone()
+    trainer.save_model(output_dir=training_arguments.output_dir)
     dist_s.wait_for_everyone()
 
-    trainer.save_model(output_dir=training_arguments.output_dir)
-
+    trainer.accelerator.free_memory()
     dist_s.wait_for_everyone()
 
 
@@ -960,25 +973,33 @@ def train(training_arguments: HFTrainingArguments, other_arguments: OtherArgumen
                     model_id=other_arguments.model_id, torch_dtype=get_torch_dtype(training_arguments)
                 )
 
+    logger.info(get_gpu_metrics())
     _train(
         training_arguments=training_arguments,
         other_arguments=other_arguments,
         run=run,
     )
+    logger.info(get_gpu_metrics())
 
-    output_dir = training_arguments.output_dir
-    torch_dtype = get_torch_dtype(training_arguments)
-
+    if training_arguments.deepspeed:
+        deepspeed.utils.debug.module_names = {}
+        deepspeed.utils.debug.param_names = {}
+    
     if other_arguments.use_lora or other_arguments.use_qlora:
-        # Cleanup before we do any merging
-        if training_arguments.deepspeed:
-            unset_hf_deepspeed_config()
-        training_arguments = None
-        del training_arguments
         _cleanup_gpus()
         dist_s.wait_for_everyone()
+
+        with dist_s.main_process_first():
+            if dist_s.is_main_process:
+                breakpoint()
+
         if dist_s.is_main_process:
-            merge_adapters_if_any(model_id=other_arguments.model_id, torch_dtype=torch_dtype, output_dir=output_dir)
+            with deepspeed_zero3_disabled(training_arguments):
+                merge_adapters_if_any(
+                    model_id=other_arguments.model_id,
+                    torch_dtype=get_torch_dtype(training_arguments),
+                    output_dir=training_arguments.output_dir,
+                )
 
     if dist_s.is_main_process and run:
         *_, model_name = other_arguments.model_id.rsplit("/", 1)

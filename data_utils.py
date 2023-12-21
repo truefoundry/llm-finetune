@@ -286,7 +286,10 @@ def _plot_ascii_lengths_histogram(data, title):
     for i, value in enumerate(histogram):
         lower_bound = i * bucket_width
         upper_bound = (i + 1) * bucket_width - 1
-        bar = "□" * int(value * scale_factor)
+        if value:
+            bar = "□" * int(value * scale_factor)
+        else:
+            bar = "x"
         logger.info(f"{bar} ({lower_bound}-{upper_bound} tokens, Count: {value})")
     logger.info(bottom)
     logger.info("\n")
