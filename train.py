@@ -7,13 +7,13 @@ import shutil
 import sys
 import tempfile
 import time
+import weakref
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from typing import Any, Dict, Optional
-import weakref
-import deepspeed
 
 import bitsandbytes as bnb
+import deepspeed
 import mlfoundry
 import torch
 from accelerate import infer_auto_device_map, init_empty_weights
@@ -56,7 +56,6 @@ from mlfoundry_utils import (
     sanitize_name,
 )
 from utils import ExtraMetricsCallback, get_gpu_metrics
-
 
 # TODO (chiragjn):
 #   - Test deepspeed with resume
@@ -747,13 +746,6 @@ def dist_build_dataset(
     return train_dataset, eval_dataset
 
 
-_param_weak_refs = []
-def _setup_weak_refs(model):
-    global _param_weak_refs
-    for name, param in model.named_parameters():
-        _param_weak_refs.append((name, weakref.ref(param)))
-
-
 def _train(
     *,
     training_arguments: HFTrainingArguments,
@@ -893,17 +885,13 @@ def _train(
     trainer.train(resume_from_checkpoint=last_checkpoint_dir)
     dist_s.wait_for_everyone()
 
-    if dist_s.is_main_process:
-        _setup_weak_refs(trainer.model)
-
     logger.info("Saving model...")
     if dist_s.is_main_process:
         cleanup_checkpoints(output_dir=training_arguments.output_dir)
-    
+
     dist_s.wait_for_everyone()
     trainer.save_model(output_dir=training_arguments.output_dir)
     dist_s.wait_for_everyone()
-
     trainer.accelerator.free_memory()
     dist_s.wait_for_everyone()
 
@@ -981,17 +969,15 @@ def train(training_arguments: HFTrainingArguments, other_arguments: OtherArgumen
     )
     logger.info(get_gpu_metrics())
 
+    # TODO (chiragjn): Currently tranining with Deepspeed is risky because it does not free up memory correctly
+    # See: https://github.com/microsoft/DeepSpeed/issues/4856
     if training_arguments.deepspeed:
         deepspeed.utils.debug.module_names = {}
         deepspeed.utils.debug.param_names = {}
-    
+
     if other_arguments.use_lora or other_arguments.use_qlora:
         _cleanup_gpus()
         dist_s.wait_for_everyone()
-
-        with dist_s.main_process_first():
-            if dist_s.is_main_process:
-                breakpoint()
 
         if dist_s.is_main_process:
             with deepspeed_zero3_disabled(training_arguments):
