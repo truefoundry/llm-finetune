@@ -842,7 +842,7 @@ def _train(
         torch.cuda.synchronize()
 
     dist_s.wait_for_everyone()
-    if hasattr(trainer, "deepspeed"):
+    if training_arguments.deepspeed:
         with patched_deepspeed_load_checkpoint():
             trainer.train(resume_from_checkpoint=last_checkpoint_dir)
     else:
@@ -852,12 +852,11 @@ def _train(
     logger.info("Saving model...")
     if dist_s.is_main_process:
         cleanup_checkpoints(output_dir=training_arguments.output_dir)
-
     dist_s.wait_for_everyone()
     trainer.save_model(output_dir=training_arguments.output_dir)
     dist_s.wait_for_everyone()
 
-    if hasattr(trainer, "deepspeed") and hasattr(trainer.deepspeed, "destroy"):
+    if training_arguments.deepspeed and hasattr(trainer, "deepspeed") and hasattr(trainer.deepspeed, "destroy"):
         trainer.deepspeed.destroy()
     trainer.accelerator.free_memory()
     dist_s.wait_for_everyone()
