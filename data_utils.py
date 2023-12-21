@@ -338,7 +338,7 @@ def build_dataset(
     _plot_ascii_lengths_histogram(eupl, title="Eval Prompt Lengths Distribution")
     _plot_ascii_lengths_histogram(eucl, title="Eval Completion Lengths Distribution")
     _plot_ascii_lengths_histogram(eutl, title="Eval Total Lengths Distribution")
-    dataset_dict.remove_columns(
+    dataset_dict = dataset_dict.remove_columns(
         [UNTRUNCATED_PROMPT_LENGTHS_KEY, UNTRUNCATED_COMPLETION_LENGTHS_KEY, UNTRUNCATED_TOTAL_LENGTHS_KEY]
     )
     # --- Dataset Info ---

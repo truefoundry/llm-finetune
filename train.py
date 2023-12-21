@@ -301,6 +301,8 @@ def filter_trainer_args_for_logging(
         "warmup_ratio": training_arguments.warmup_ratio,
         "use_lora": other_arguments.use_lora,
         "use_qlora": other_arguments.use_qlora,
+        "deepspeed": training_arguments.deepspeed,
+        "use_ddp": other_arguments.use_ddp,
     }
     if other_arguments.use_lora or other_arguments.use_qlora:
         lora_args = {
