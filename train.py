@@ -7,11 +7,13 @@ import shutil
 import sys
 import tempfile
 import time
+import weakref
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from typing import Any, Dict, Optional
 
 import bitsandbytes as bnb
+import deepspeed
 import mlfoundry
 import torch
 from accelerate import infer_auto_device_map, init_empty_weights
@@ -53,7 +55,7 @@ from mlfoundry_utils import (
     log_model_to_mlfoundry,
     sanitize_name,
 )
-from utils import ExtraMetricsCallback
+from utils import ExtraMetricsCallback, get_gpu_metrics
 
 # TODO (chiragjn):
 #   - Test deepspeed with resume
@@ -286,33 +288,39 @@ def _cleanup_gpus():
     #   - https://github.com/huggingface/peft/pull/1063
     #   - https://github.com/huggingface/transformers/pull/27412
     # Yes, sleeping is stupid but necessary till the above PRs are merged and made available in a new version
+    logger.info("Clearing gpus before moving ahead ...")
     for _ in range(6):
         gc.collect()
         time.sleep(10)
         if torch.cuda.is_available():
             torch.cuda.empty_cache()
             torch.cuda.synchronize()
+        logger.info(get_gpu_metrics())
 
 
-def merge_adapters_if_any(training_arguments: HFTrainingArguments, other_arguments: OtherArguments):
-    check_if_model_will_fit_only_with_gpus(training_arguments=training_arguments, other_arguments=other_arguments)
+def merge_adapters_if_any(
+    model_id: str,
+    torch_dtype,
+    output_dir: str,
+):
+    check_if_model_will_fit_only_with_gpus(model_id=model_id, torch_dtype=torch_dtype)
     logger.info("Loading model and lora layers for merging ...")
     model = AutoPeftModelForCausalLM.from_pretrained(
-        training_arguments.output_dir,
+        output_dir,
         trust_remote_code=True,
         low_cpu_mem_usage=True,
-        torch_dtype=get_torch_dtype(training_arguments),
+        torch_dtype=torch_dtype,
         device_map="balanced",
     )
     logger.info("Merging lora adapter into main model. This can take a while ...")
     model = model.merge_and_unload()
-    model.save_pretrained(training_arguments.output_dir, safe_serialization=True)
+    model.save_pretrained(output_dir, safe_serialization=True)
     for filename in [
         "adapter_config.json",
         "adapter_model.safetensors",
         "adapter_model.bin",
     ]:
-        file_to_delete = os.path.join(training_arguments.output_dir, filename)
+        file_to_delete = os.path.join(output_dir, filename)
         if os.path.exists(file_to_delete):
             os.remove(file_to_delete)
 
@@ -463,7 +471,8 @@ def get_model(
         model_load_kwargs.pop("use_cache", None)
 
     if other_arguments.use_flash_attention:
-        model_load_kwargs["attn_implementation"] = "flash_attention_2"
+        # model_load_kwargs["attn_implementation"] = "flash_attention_2"
+        model_load_kwargs["use_flash_attention_2"] = True
 
     if other_arguments.use_qlora:
         compute_dtype = get_torch_dtype(training_arguments)
@@ -647,17 +656,17 @@ def deepspeed_zero3_disabled(training_arguments: HFTrainingArguments):
 
 
 def check_if_model_will_fit_only_with_gpus(
-    training_arguments: HFTrainingArguments,
-    other_arguments: OtherArguments,
+    model_id: str,
+    torch_dtype,
 ):
     with init_empty_weights():
         model = AutoModelForCausalLM.from_pretrained(
-            other_arguments.model_id,
+            model_id,
             trust_remote_code=True,
             low_cpu_mem_usage=True,
-            torch_dtype=get_torch_dtype(training_arguments),
+            torch_dtype=torch_dtype,
         )
-    device_map = infer_auto_device_map(model, dtype=get_torch_dtype(training_arguments))
+    device_map = infer_auto_device_map(model, dtype=torch_dtype)
     logger.info(f"Inferred device_map for auto settings: {device_map}")
     if any(not isinstance(v, int) for v in device_map.values()):
         raise RuntimeError(
@@ -704,7 +713,7 @@ def dist_build_dataset(
     logger.info("Building dataset...")
     dataset_cache_path = os.path.join(CACHE_DIR, "dataset")
     if dist_s.is_main_process:
-        dataset_dict = build_dataset(
+        dataset_dict, dataset_info = build_dataset(
             train_data=train_data,
             eval_data=eval_data,
             tokenizer=tokenizer,
@@ -712,6 +721,21 @@ def dist_build_dataset(
             train_on_prompt=train_on_prompt,
         )
         dataset_dict.save_to_disk(dataset_cache_path)
+        logger.info(f"Dataset max sequence lengths: {dataset_info}")
+        if any(
+            length > max_length
+            for length in (
+                dataset_info.train_max_prompt_length,
+                dataset_info.train_max_total_length,
+                dataset_info.eval_max_prompt_length,
+                dataset_info.eval_max_total_length,
+            )
+        ):
+            raise ValueError(
+                f"Some sequences in the dataset have prompt or (prompt +  completion) lengths greater than the "
+                f"model's max sequence length ({max_length}). Please check the dataset length numbers above. "
+                f"Please remove such longer sequences and restart."
+            )
     else:
         logger.info("Loading datasets from cache ...")
         dataset_dict = DatasetDict.load_from_disk(dataset_cache_path)
@@ -807,8 +831,6 @@ def _train(
         training_arguments=training_arguments,
         other_arguments=other_arguments,
     )
-    # TODO (chiragjn): If there are new tokens added, check if we want grads to be enabled on embedding and lm head.
-    #   prepare_model_for_k_bit actually disables grad on embedding and lm head
     if model.get_input_embeddings().num_embeddings < len(tokenizer):
         logger.info(
             f"Resizing embeddings layer for newly added tokens. "
@@ -817,6 +839,10 @@ def _train(
         )
         model.resize_token_embeddings(len(tokenizer))
 
+    # TODO (chiragjn):
+    #   If there are new tokens added, check if we want grads to be enabled on embedding and lm head.
+    #   prepare_model_for_k_bit actually disables grad on embedding and lm head
+    #   We need to pass them to modules_to_save in LoraConfig
     if other_arguments.use_lora or other_arguments.use_qlora:
         model = get_peft_wrapped_model(
             model,
@@ -856,9 +882,7 @@ def _train(
         torch.cuda.synchronize()
 
     dist_s.wait_for_everyone()
-
     trainer.train(resume_from_checkpoint=last_checkpoint_dir)
-
     dist_s.wait_for_everyone()
 
     logger.info("Saving model...")
@@ -866,9 +890,9 @@ def _train(
         cleanup_checkpoints(output_dir=training_arguments.output_dir)
 
     dist_s.wait_for_everyone()
-
     trainer.save_model(output_dir=training_arguments.output_dir)
-
+    dist_s.wait_for_everyone()
+    trainer.accelerator.free_memory()
     dist_s.wait_for_everyone()
 
 
@@ -934,20 +958,34 @@ def train(training_arguments: HFTrainingArguments, other_arguments: OtherArgumen
         if other_arguments.use_lora or other_arguments.use_qlora:
             with deepspeed_zero3_disabled(training_arguments):
                 check_if_model_will_fit_only_with_gpus(
-                    training_arguments=training_arguments, other_arguments=other_arguments
+                    model_id=other_arguments.model_id, torch_dtype=get_torch_dtype(training_arguments)
                 )
 
+    logger.info(get_gpu_metrics())
     _train(
         training_arguments=training_arguments,
         other_arguments=other_arguments,
         run=run,
     )
-    _cleanup_gpus()
+    logger.info(get_gpu_metrics())
 
-    if dist_s.is_main_process:
-        if other_arguments.use_lora or other_arguments.use_qlora:
+    # TODO (chiragjn): Currently tranining with Deepspeed is risky because it does not free up memory correctly
+    # See: https://github.com/microsoft/DeepSpeed/issues/4856
+    if training_arguments.deepspeed:
+        deepspeed.utils.debug.module_names = {}
+        deepspeed.utils.debug.param_names = {}
+
+    if other_arguments.use_lora or other_arguments.use_qlora:
+        _cleanup_gpus()
+        dist_s.wait_for_everyone()
+
+        if dist_s.is_main_process:
             with deepspeed_zero3_disabled(training_arguments):
-                merge_adapters_if_any(training_arguments=training_arguments, other_arguments=other_arguments)
+                merge_adapters_if_any(
+                    model_id=other_arguments.model_id,
+                    torch_dtype=get_torch_dtype(training_arguments),
+                    output_dir=training_arguments.output_dir,
+                )
 
     if dist_s.is_main_process and run:
         *_, model_name = other_arguments.model_id.rsplit("/", 1)
