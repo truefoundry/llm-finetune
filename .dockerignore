@@ -8,3 +8,5 @@ model/
 pytorch_model*.bin
 *.jsonl
 dev.sh
+*.log
+tensorboard_logs

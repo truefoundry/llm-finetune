@@ -32,3 +32,4 @@
 --adam_beta2 0.95
 --optim adamw_torch_fused
 --dataloader_num_workers 2
+--logging_dir tensorboard_logs
