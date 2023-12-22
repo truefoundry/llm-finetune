@@ -30,4 +30,5 @@
 --auto_find_batch_size true
 --adam_beta1 0.9
 --adam_beta2 0.95
---optim adamw_torch
+--optim adamw_torch_fused
+--dataloader_num_workers 2

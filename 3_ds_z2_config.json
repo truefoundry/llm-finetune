@@ -27,7 +27,7 @@
     "sub_group_size": 1e9,
     "reduce_bucket_size": "auto",
     "allgather_partitions": true,
-    "allgather_bucket_size": 5e8,
+    "allgather_bucket_size": 2e8,
     "reduce_scatter": true,
     "round_robin_gradients": true
   },
@@ -36,5 +36,6 @@
   "steps_per_print": 2000,
   "train_batch_size": "auto",
   "train_micro_batch_size_per_gpu": "auto",
-  "wall_clock_breakdown": false
+  "wall_clock_breakdown": false,
+  "zero_allow_untested_optimizer": true
 }

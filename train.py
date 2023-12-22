@@ -57,8 +57,6 @@ from monkey_patch import patched_deepspeed_load_checkpoint
 from utils import ExtraMetricsCallback, get_gpu_metrics
 
 # TODO (chiragjn):
-#   - Test deepspeed with resume
-#   - Test and fix Deepspeed (Zero 3) weight gathering bugs during checkpointing if any
 #   - Invent some work around to use auto batch size finder with deepspeed
 #   - Add support for dataset packing
 #   - Add support for dataset streaming
@@ -232,6 +230,21 @@ class HFTrainer(Trainer):
             self.accelerator.ddp_handler.gradient_as_bucket_view = True
 
         return outputs
+
+    # This is only for debugging purposes
+    # def training_step(self, model, inputs):
+    #     torch.cuda.synchronize()
+    #     logger.info(f"Pre FWD: {get_gpu_metrics()}")
+    #     outputs = super().training_step(model, inputs)
+    #     torch.cuda.synchronize()
+    #     logger.info(f"FWD + BWD?: {get_gpu_metrics()}")
+    #     return outputs
+
+    # def compute_loss(self, model, inputs, return_outputs=False):
+    #     outputs = super().compute_loss(model, inputs, return_outputs)
+    #     torch.cuda.synchronize()
+    #     logger.info(f"FWD: {get_gpu_metrics()}")
+    #     return outputs
 
 
 def get_torch_dtype(training_arguments: HFTrainingArguments):
