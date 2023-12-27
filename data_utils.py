@@ -309,14 +309,16 @@ def build_dataset(
     # TODO (chiragjn): Read cpu limits from cgroup, cpu_count is not usable in containers environment
     num_proc = max(1, min(4, os.cpu_count()))
     num_proc = num_proc if num_proc > 1 else None
+    original_truncation_side = tokenizer.truncation_side
+    tokenizer.truncation_side = "left"  # It is better to drop prompt tokens than completion ones
     dataset_dict = dataset_dict.map(
         builder.construct_dataset,
         remove_columns=[PROMPT_KEY, COMPLETION_KEY],
         batched=True,
         batch_size=32,
-        num_proc=None,
+        num_proc=None,  # TODO (chiragjn): Make use of num_proc. However, when we use it sometimes we run into deadlocks
     )
-
+    tokenizer.truncation_side = original_truncation_side
     # --- Dataset Info ---
     tupl = dataset_dict["train"][UNTRUNCATED_PROMPT_LENGTHS_KEY]
     tucl = dataset_dict["train"][UNTRUNCATED_COMPLETION_LENGTHS_KEY]
