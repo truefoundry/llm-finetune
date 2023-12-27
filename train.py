@@ -46,7 +46,12 @@ from transformers.utils import is_torch_tf32_available
 from transformers.utils import logging as hf_logging_utils
 
 from checkpoint_utils import cleanup_checkpoints, get_last_checkpoint_for_resume_if_any
-from data_utils import SequenceDataCollator, build_dataset, get_data
+from data_utils import (
+    DataValidationException,
+    SequenceDataCollator,
+    build_dataset,
+    get_data,
+)
 from mlfoundry_utils import (
     MLFoundryCallback,
     get_or_create_run,
@@ -173,7 +178,7 @@ class OtherArguments:
     max_length: Optional[int] = field(
         default=None,
         metadata={
-            "help": "Max length to truncate the examples to. By default we try to pick "
+            "help": "Max length of the sequences (prompt + completion) to allow. Sequences longer than this would raise a data validation error. By default we try to pick "
             "from tokenizer config (default: None)"
         },
     )
@@ -481,7 +486,7 @@ def get_model(
         if dist_s.is_main_process:
             _log_model_parameters(model)
         # TODO (chiragjn): This is disabled because resuming does not work: https://github.com/TimDettmers/bitsandbytes/issues/782
-        # training_arguments.optim = "paged_adamw_32bit"
+        # training_arguments.optim = "paged_adamw_32bit" # "paged_adamw_8bit"
     else:
         if training_arguments.deepspeed and is_deepspeed_zero3_enabled:
             model_load_kwargs.pop("low_cpu_mem_usage", None)
@@ -599,23 +604,34 @@ def get_tokenizer(model_source: str):
 
 def get_max_length(max_length, tokenizer, model_config):
     logger.info("Resolving max_length for truncation...")
+    model_max_length = None
+    if tokenizer.model_max_length > int(1e6):
+        logger.info(f"tokenizer config does not have proper model_max_length set. Looking at model config")
+        for length_setting in [
+            "max_sequence_length",
+            "n_positions",
+            "max_position_embeddings",
+        ]:
+            model_max_length = getattr(model_config, length_setting, None)
+            if model_max_length:
+                logger.info(f"Assuming value of {length_setting} from model config as max length: {model_max_length}")
+                break
+        if not model_max_length:
+            logger.info(
+                f"Found no max length setting, falling back to default of 1024. If this fallback is undesired then please fix the model max length in tokenizer/model config."
+            )
+            model_max_length = 1024
+    else:
+        model_max_length = tokenizer.model_max_length
+
     if max_length is None:
-        if tokenizer.model_max_length > int(1e6):
-            logger.info(f"tokenizer config does not have proper model_max_length set. Looking at model config")
-            for length_setting in [
-                "max_sequence_length",
-                "n_positions",
-                "max_position_embeddings",
-            ]:
-                max_length = getattr(model_config, length_setting, None)
-                if max_length:
-                    logger.info(f"Assuming value of {length_setting} from model config as max length: {max_length}")
-                    break
-            if not max_length:
-                logger.info(f"Found no max length setting, falling back to default of 512")
-                max_length = 512
-        else:
-            max_length = tokenizer.model_max_length
+        max_length = model_max_length
+    else:
+        if max_length > model_max_length:
+            raise ValueError(
+                f"Chosen `max_length` ({max_length}) is longer than model's max length ({model_max_length}). "
+            )
+
     logger.info(f"Finally using max_length: {max_length}")
     return max_length
 
@@ -706,9 +722,9 @@ def dist_build_dataset(
                 dataset_info.eval_max_total_length,
             )
         ):
-            raise ValueError(
+            raise DataValidationException(
                 f"Some sequences in the dataset have prompt or (prompt +  completion) lengths greater than the "
-                f"model's max sequence length ({max_length}). Please check the dataset length numbers above. "
+                f"selected max sequence length ({max_length}). Please check the dataset length numbers above. "
                 f"Please remove such longer sequences and restart."
             )
     else:

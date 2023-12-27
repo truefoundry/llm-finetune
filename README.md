@@ -94,7 +94,7 @@ Speedup is second priority but we take what we can easily get
 #### Experimental things we want to try
 
 - Memory Savings Optimizers
-    - AnyPrecision Adam: `--optim anyprecision_adamw --optim-args "use_kahan_summation=True, momentum_dtype=bf1oat16, variance_dtype=bf1oat16"`
+    - AnyPrecision Adam: `--optim adamw_anyprecision --optim-args "use_kahan_summation=True, momentum_dtype=bfloat16, variance_dtype=bfloat16"`
     - 8-bit Adam: `--optim adamw_bnb_8bit`
     - Zero's BF16 optimizer
 - torch.compile -> Works in some cases, can speedup training
