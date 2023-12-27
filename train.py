@@ -41,7 +41,7 @@ from transformers.integrations.deepspeed import (
     unset_hf_deepspeed_config,
 )
 from transformers.integrations.integration_utils import TensorBoardCallback
-from transformers.training_args import ParallelMode
+from transformers.training_args import ParallelMode, default_logdir
 from transformers.utils import is_torch_tf32_available
 from transformers.utils import logging as hf_logging_utils
 
@@ -100,6 +100,9 @@ class HFTrainingArguments(TrainingArguments):
             raise ValueError(
                 f"Auto batch size finder is not supported with Deepseed because of bugs with model preparation: https://github.com/huggingface/transformers/issues/24558"
             )
+        if self.logging_dir is not None:
+            self.logging_dir = os.path.join(self.logging_dir, default_logdir())
+            os.makedirs(self.logging_dir, exist_ok=True)
         super().__post_init__()
 
 
@@ -409,7 +412,6 @@ def setup(training_arguments: HFTrainingArguments, other_arguments: OtherArgumen
     _setup_logging(training_arguments=training_arguments)
     _maybe_set_custom_tempdir()
     _maybe_set_torch_max_memory(device=training_arguments.local_rank)
-
     if other_arguments.use_flash_attention:
         import flash_attn as _
 
