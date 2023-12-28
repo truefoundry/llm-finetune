@@ -200,9 +200,10 @@ class DatasetBuilder:
 class CausalDatasetBuilder(DatasetBuilder):
     """Builds generative dataset for Causal LM."""
 
-    def __init__(self, tokenizer, max_length, train_on_prompt=True):
+    def __init__(self, tokenizer, max_length, train_on_prompt=True, pad_to_max_length=False):
         super().__init__(tokenizer, max_length)
         self.train_on_prompt = train_on_prompt
+        self.pad_to_max_length = pad_to_max_length
 
     def construct_dataset(self, input_batch):
         tokenized_prompts = self.batch_tokenize(input_batch[PROMPT_KEY], truncation=False)
@@ -215,7 +216,9 @@ class CausalDatasetBuilder(DatasetBuilder):
         labels = []
         for prompt, completion in zip(input_batch[PROMPT_KEY], input_batch[COMPLETION_KEY]):
             labels.append(prompt + "\n" + completion + self.tokenizer.eos_token)
-        input_ids = [val.squeeze() for val in self.batch_tokenize(labels)]
+
+        padding = "max_length" if self.pad_to_max_length else "longest"
+        input_ids = [val.squeeze() for val in self.batch_tokenize(labels, padding=padding)]
         labels = copy.deepcopy(input_ids)
         if not self.train_on_prompt:
             # Masking for loss computation
@@ -304,7 +307,11 @@ def build_dataset(
 ):
     # TODO (chiragjn): This should not be loading the entire dataset in memory all at once. Make this streaming
     # TODO (chiragjn): Add dataset packing to increase training efficiency
-    builder = CausalDatasetBuilder(tokenizer=tokenizer, max_length=max_length, train_on_prompt=train_on_prompt)
+    builder = CausalDatasetBuilder(
+        tokenizer=tokenizer,
+        max_length=max_length,
+        train_on_prompt=train_on_prompt,
+    )
     dataset_dict = DatasetDict(train=Dataset.from_list(train_data), eval=Dataset.from_list(eval_data))
     # TODO (chiragjn): Read cpu limits from cgroup, cpu_count is not usable in containers environment
     num_proc = max(1, min(4, os.cpu_count()))

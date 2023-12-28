@@ -9,7 +9,7 @@ import tempfile
 import time
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
-from typing import Any, Dict, Optional
+from typing import Any, Dict, List, Optional
 
 import bitsandbytes as bnb
 import mlfoundry
@@ -184,6 +184,10 @@ class OtherArguments:
             "help": "Max length of the sequences (prompt + completion) to allow. Sequences longer than this would raise a data validation error. By default we try to pick "
             "from tokenizer config (default: None)"
         },
+    )
+    pad_to_max_length: bool = field(
+        default=False,
+        metadata={"help": "If to always pad to the given/found max sequence length (default: False)"},
     )
     max_num_samples: Optional[int] = field(
         default=None,
@@ -516,6 +520,7 @@ def get_peft_wrapped_model(
     model,
     training_arguments: HFTrainingArguments,
     other_arguments: OtherArguments,
+    modules_to_save: Optional[List[str]] = None,
     _device_map=None,
     _checkpoint_dir: Optional[str] = None,
 ):
@@ -542,6 +547,7 @@ def get_peft_wrapped_model(
             lora_dropout=other_arguments.lora_dropout,
             bias=other_arguments.lora_bias,
             task_type="CAUSAL_LM",
+            modules_to_save=modules_to_save,
         )
     )
     logger.info("Applying peft config ...")
@@ -608,6 +614,9 @@ def get_tokenizer(model_source: str):
         special_tokens_dict["unk_token"] = DEFAULT_UNK_TOKEN
     # TODO (chiragjn): Consider adding fake tokens to vocab to pad to multiple of 64. Can provide better throughput
     num_new_tokens = tokenizer.add_special_tokens(special_tokens_dict)
+    if "bos_token" or "eos_token" in special_tokens_dict:
+        if hasattr(tokenizer, "update_post_processor"):
+            tokenizer.update_post_processor()
     return tokenizer, num_new_tokens
 
 
@@ -705,7 +714,8 @@ def dist_build_dataset(
     train_data,
     eval_data,
     tokenizer,
-    max_length,
+    max_length: int,
+    pad_to_max_length: bool,
     train_on_prompt: bool,
     training_arguments: HFTrainingArguments,
 ):
@@ -718,6 +728,7 @@ def dist_build_dataset(
             eval_data=eval_data,
             tokenizer=tokenizer,
             max_length=max_length,
+            pad_to_max_length=pad_to_max_length,
             train_on_prompt=train_on_prompt,
         )
         dataset_dict.save_to_disk(dataset_cache_path)
@@ -796,6 +807,7 @@ def _train(
             eval_data=eval_data,
             tokenizer=tokenizer,
             max_length=max_length,
+            pad_to_max_length=other_arguments.pad_to_max_length,
             train_on_prompt=other_arguments.train_on_prompt,
             training_arguments=training_arguments,
         )
@@ -831,6 +843,7 @@ def _train(
         training_arguments=training_arguments,
         other_arguments=other_arguments,
     )
+    lora_modules_to_save = None
     if model.get_input_embeddings().num_embeddings < len(tokenizer):
         logger.info(
             f"Resizing embeddings layer for newly added tokens. "
@@ -838,16 +851,15 @@ def _train(
             f"layer has {model.get_input_embeddings().num_embeddings}"
         )
         model.resize_token_embeddings(len(tokenizer))
+        # TODO (chiragjn): Check if we want to enable this!
+        # lora_modules_to_save = ["embed_tokens", "lm_head"]
 
-    # TODO (chiragjn):
-    #   If there are new tokens added, check if we want grads to be enabled on embedding and lm head.
-    #   prepare_model_for_k_bit actually disables grad on embedding and lm head
-    #   We need to pass them to modules_to_save in LoraConfig
     if other_arguments.use_lora or other_arguments.use_qlora:
         model = get_peft_wrapped_model(
             model,
             training_arguments=training_arguments,
             other_arguments=other_arguments,
+            modules_to_save=lora_modules_to_save,
         )
     logger.info("Training...")
     # TODO (chiragjn): Add text generation metrics to `compute_metrics
