@@ -200,7 +200,7 @@ class DatasetBuilder:
 class CausalDatasetBuilder(DatasetBuilder):
     """Builds generative dataset for Causal LM."""
 
-    def __init__(self, tokenizer, max_length, train_on_prompt=True, pad_to_max_length=False):
+    def __init__(self, tokenizer, max_length, pad_to_max_length=False, train_on_prompt=True):
         super().__init__(tokenizer, max_length)
         self.train_on_prompt = train_on_prompt
         self.pad_to_max_length = pad_to_max_length
@@ -303,6 +303,7 @@ def build_dataset(
     eval_data,
     tokenizer,
     max_length: int,
+    pad_to_max_length: bool,
     train_on_prompt: bool,
 ):
     # TODO (chiragjn): This should not be loading the entire dataset in memory all at once. Make this streaming
@@ -310,6 +311,7 @@ def build_dataset(
     builder = CausalDatasetBuilder(
         tokenizer=tokenizer,
         max_length=max_length,
+        pad_to_max_length=pad_to_max_length,
         train_on_prompt=train_on_prompt,
     )
     dataset_dict = DatasetDict(train=Dataset.from_list(train_data), eval=Dataset.from_list(eval_data))
