@@ -20,6 +20,10 @@
       "weight_decay": "auto"
     }
   },
+  "activation_checkpointing": {
+    "partition_activations": false,
+    "cpu_checkpointing": false
+  },
   "zero_optimization": {
     "stage": 3,
     "overlap_comm": true,

@@ -239,19 +239,26 @@ class HFTrainer(Trainer):
 
         return outputs
 
-    # This is only for debugging purposes
+    # # This is only for debugging purposes
+    # def create_optimizer_and_scheduler(self, num_training_steps: int):
+    #     outputs = super().create_optimizer_and_scheduler(num_training_steps)
+    #     breakpoint()
+    #     return outputs
+
     # def training_step(self, model, inputs):
     #     torch.cuda.synchronize()
     #     logger.info(f"Pre FWD: {get_gpu_metrics()}")
     #     outputs = super().training_step(model, inputs)
     #     torch.cuda.synchronize()
     #     logger.info(f"FWD + BWD?: {get_gpu_metrics()}")
+    #     breakpoint()
     #     return outputs
 
     # def compute_loss(self, model, inputs, return_outputs=False):
     #     outputs = super().compute_loss(model, inputs, return_outputs)
     #     torch.cuda.synchronize()
     #     logger.info(f"FWD: {get_gpu_metrics()}")
+    #     breakpoint()
     #     return outputs
 
 

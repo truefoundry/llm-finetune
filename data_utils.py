@@ -177,13 +177,13 @@ class DatasetBuilder:
         self.tokenizer = tokenizer
         self.max_length = max_length
 
-    def batch_tokenize(self, texts, truncation=True):
+    def batch_tokenize(self, texts, truncation=True, padding="longest"):
         """Tokenizes text. Presently doesn't pad inputs, just returns input ids."""
         tokenized = [
             self.tokenizer(
                 text,
                 return_tensors="pt",
-                padding="longest",
+                padding=padding,
                 max_length=self.max_length,
                 truncation=truncation,
             ).input_ids
