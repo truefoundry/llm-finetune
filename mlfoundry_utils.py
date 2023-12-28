@@ -134,6 +134,8 @@ class MLFoundryCallback(TrainerCallback):
 
         metrics = {}
         for k, v in logs.items():
+            if k.startswith("system/gpu"):
+                continue
             if isinstance(v, (int, float, np.integer, np.floating)) and math.isfinite(v):
                 metrics[k] = v
             else:
