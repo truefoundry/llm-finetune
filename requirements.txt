@@ -4,7 +4,7 @@ cloud-files==4.15.2
 mlfoundry==0.10.4
 transformers[accelerate,deepspeed,sentencepiece,tokenizers] @ git+https://github.com/huggingface/transformers@3b7675b2b844b02d4821b827871a21ad16dd446c
 accelerate==0.25.0
-deepspeed @ git+https://github.com/chiragjn/DeepSpeed@a7cdd6b7c32006927a02bfd052e54c7414e020db
+deepspeed @ git+https://github.com/microsoft/DeepSpeed@40342055cefda4c453e803759861b00ca5cfb879
 datasets==2.14.7
 peft==0.6.2
 bitsandbytes==0.41.3.post2
