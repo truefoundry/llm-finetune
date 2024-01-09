@@ -178,22 +178,23 @@ class DatasetBuilder:
         self.max_length = max_length
 
     def batch_tokenize(self, texts, truncation=True, padding="longest"):
-        """Tokenizes text. Presently doesn't pad inputs, just returns input ids."""
-        tokenized = [
-            self.tokenizer(
+        """Tokenizes text. Texts are not processed in batch even though the name says so"""
+        input_ids, unpadded_lens = [], []
+        for text in texts:
+            output = self.tokenizer(
                 text,
                 return_tensors="pt",
                 padding=padding,
                 max_length=self.max_length,
                 truncation=truncation,
-            ).input_ids
-            for text in texts
-        ]
-        return tokenized
+            )
+            input_ids.append(output.input_ids)
+            unpadded_lens.append(output.attention_mask.sum().item())
+        return input_ids, unpadded_lens
 
-    def construct_dataset(self, input_batch):
-        tokenized_input_ids = self.batch_tokenize(input_batch[PROMPT_KEY])
-        tokenized_labels = self.batch_tokenize(input_batch[COMPLETION_KEY])
+    def construct_dataset(self, input_batch, truncation=True, padding="longest"):
+        tokenized_input_ids, _ = self.batch_tokenize(input_batch[PROMPT_KEY], truncation=truncation, padding=padding)
+        tokenized_labels, _ = self.batch_tokenize(input_batch[COMPLETION_KEY], truncation=truncation, padding=padding)
         return {"input_ids": tokenized_input_ids, "labels": tokenized_labels}
 
 
@@ -206,27 +207,26 @@ class CausalDatasetBuilder(DatasetBuilder):
         self.pad_to_max_length = pad_to_max_length
 
     def construct_dataset(self, input_batch):
-        tokenized_prompts = self.batch_tokenize(input_batch[PROMPT_KEY], truncation=False)
-        tokenized_completion = self.batch_tokenize(input_batch[COMPLETION_KEY], truncation=False)
-        untruncated_prompt_lens = [ids.shape[1] for ids in tokenized_prompts]
-        # This will include bos, but that's okay, for counting sake we can count it as eos
-        untruncated_completion_lens = [ids.shape[1] for ids in tokenized_completion]
+        _, untruncated_prompt_lens = self.batch_tokenize(input_batch[PROMPT_KEY], truncation=False)
+        _, untruncated_completion_lens = self.batch_tokenize(input_batch[COMPLETION_KEY], truncation=False)
         untruncated_total_lens = [p + c for p, c in zip(untruncated_prompt_lens, untruncated_completion_lens)]
 
-        labels = []
+        sequences = []
         for prompt, completion in zip(input_batch[PROMPT_KEY], input_batch[COMPLETION_KEY]):
-            labels.append(prompt + "\n" + completion + self.tokenizer.eos_token)
+            sequences.append(prompt + "\n" + completion + self.tokenizer.eos_token)
 
         padding = "max_length" if self.pad_to_max_length else "longest"
-        input_ids = [val.squeeze() for val in self.batch_tokenize(labels, padding=padding)]
+        input_ids, unpadded_lens = self.batch_tokenize(sequences, padding=padding)
+        input_ids = [val.squeeze() for val in input_ids]
         labels = copy.deepcopy(input_ids)
+        if padding == "max_length":
+            for label, unpadded_len in zip(labels, unpadded_lens):
+                label[unpadded_len:] = IGNORE_INDEX
         if not self.train_on_prompt:
             # Masking for loss computation
-            tokenized_prompts = self.batch_tokenize(input_batch[PROMPT_KEY])
-            prompt_lens = [ids.shape[1] for ids in tokenized_prompts]
+            _, prompt_lens = self.batch_tokenize(input_batch[PROMPT_KEY])
             for label, source_len in zip(labels, prompt_lens):
                 label[:source_len] = IGNORE_INDEX
-
         return {
             "input_ids": input_ids,
             "labels": labels,
