@@ -626,9 +626,9 @@ def get_max_length(max_length, tokenizer, model_config):
     if tokenizer.model_max_length > int(1e6):
         logger.info(f"tokenizer config does not have proper model_max_length set. Looking at model config")
         for length_setting in [
+            "max_position_embeddings",
             "max_sequence_length",
             "n_positions",
-            "max_position_embeddings",
         ]:
             model_max_length = getattr(model_config, length_setting, None)
             if model_max_length:
@@ -672,8 +672,8 @@ def check_if_model_will_fit_only_with_gpus(
         model = AutoModelForCausalLM.from_pretrained(
             model_id,
             trust_remote_code=True,
-            low_cpu_mem_usage=True,
             torch_dtype=torch_dtype,
+            # low_cpu_mem_usage=True,
         )
     device_map = infer_auto_device_map(model, dtype=torch_dtype)
     logger.info(f"Inferred device_map for auto settings: {device_map}")

@@ -29,7 +29,7 @@
 --half_precision_backend auto
 --auto_find_batch_size true
 --adam_beta1 0.9
---adam_beta2 0.95
+--adam_beta2 0.99
 --optim adamw_torch_fused
 --dataloader_num_workers 2
 --logging_dir tensorboard_logs
