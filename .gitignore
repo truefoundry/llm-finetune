@@ -7,6 +7,7 @@ model/
 *.safetensors
 pytorch_model*.bin
 *.jsonl
+.dev/
 dev.sh
 *.log
 data/
