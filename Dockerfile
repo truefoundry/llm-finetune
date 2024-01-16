@@ -12,7 +12,7 @@ ENV TORCH_CUDA_ARCH_LIST="7.0 7.5 8.0 8.6 9.0+PTX"
 COPY requirements.txt post-pytorch-requirements.txt /tmp/
 RUN pip install -U pip wheel setuptools && \
     pip install --no-cache-dir -U -r /tmp/requirements.txt && \
-    pip install --no-cache-dir --no-build-isolation -U /tmp/post-pytorch-requirements.txt
+    pip install --no-cache-dir --no-build-isolation -U -r /tmp/post-pytorch-requirements.txt
 # Hack to make deepspeed compile ops correctly :/
 RUN ln -s /opt/conda/lib /opt/conda/lib64
 # This is a hacky work around! Ideal way is to use

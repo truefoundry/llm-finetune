@@ -15,5 +15,5 @@ USER jovyan
 COPY requirements.txt post-pytorch-requirements.txt /tmp_home/jovyan/llm-finetune/
 RUN pip install -U pip wheel setuptools && \
     pip install --no-cache-dir -U -r /tmp_home/jovyan/llm-finetune/requirements.txt jupyter_server_proxy==4.1.0 && \
-    pip install --no-cache-dir --no-build-isolation -U /tmp_home/jovyan/llm-finetune/post-pytorch-requirements.txt
+    pip install --no-cache-dir --no-build-isolation -U -r /tmp_home/jovyan/llm-finetune/post-pytorch-requirements.txt
 COPY . /tmp_home/jovyan/llm-finetune/

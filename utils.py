@@ -66,7 +66,7 @@ class LaunchParameters(BaseModel):
         extra = "ignore"
 
     model_id: str = "TinyLlama/TinyLlama-1.1B-Chat-v1.0"
-    max_sequence_length: Optional[int] = None
+    max_length: Optional[int] = None
     batch_size: int = 1
 
 
