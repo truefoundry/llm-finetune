@@ -1,8 +1,12 @@
+import json
 import logging
 import math
+import os
+from typing import Optional
 
 import pynvml
 import torch
+from pydantic import BaseModel
 from transformers import TrainerCallback
 
 logger = logging.getLogger("truefoundry-finetune")
@@ -52,3 +56,25 @@ class ExtraMetricsCallback(TrainerCallback):
         self._add_perplexity(logs)
         logs.update(get_gpu_metrics())
         logger.info(f"Metrics: {logs}")
+
+
+# Notebook Utils
+
+
+class LaunchParameters(BaseModel):
+    class Config:
+        extra = "ignore"
+
+    model_id: str = "TinyLlama/TinyLlama-1.1B-Chat-v1.0"
+    max_sequence_length: Optional[int] = None
+    batch_size: int = 1
+
+
+def load_launch_parameters(path):
+    if os.path.exists(path):
+        with open(path) as f:
+            launch_parameters = LaunchParameters.parse_obj(json.load(f))
+    else:
+        launch_parameters = LaunchParameters()
+        print(f"File `{path}` is missing, using defaults: {launch_parameters.dict()}")
+    return launch_parameters

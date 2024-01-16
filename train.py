@@ -84,6 +84,15 @@ PROMPT_KEY = "prompt"
 COMPLETION_KEY = "completion"
 
 
+def _NullableInt(value) -> Optional[int]:
+    if value is not None:
+        if isinstance(value, str):
+            if value.lower() in ["none", "null"]:
+                return None
+            return int(value)
+    return value
+
+
 @dataclass
 class HFTrainingArguments(TrainingArguments):
     def __post_init__(self):
@@ -178,7 +187,7 @@ class OtherArguments:
         default=4,
         metadata={"help": "To enable 8 bit quantization set this to 8 or else by default it is 4"},
     )
-    max_length: Optional[int] = field(
+    max_length: _NullableInt = field(
         default=None,
         metadata={
             "help": "Max length of the sequences (prompt + completion) to allow. Sequences longer than this would raise a data validation error. By default we try to pick "
@@ -189,11 +198,11 @@ class OtherArguments:
         default=False,
         metadata={"help": "If to always pad to the given/found max sequence length (default: False)"},
     )
-    max_num_samples: Optional[int] = field(
+    max_num_samples: _NullableInt = field(
         default=None,
         metadata={"help": "For quick debugging purposes, how many samples to use (default: all)"},
     )
-    early_stopping_patience: Optional[int] = field(
+    early_stopping_patience: _NullableInt = field(
         default=None,
         metadata={
             "help": "How many evaluation steps to wait for the metric (loss) to improve before stopping. None or 0 means early stopping is not applied (default: None)"

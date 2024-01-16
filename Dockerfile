@@ -9,10 +9,10 @@ RUN micromamba install -y -c "nvidia/label/cuda-11.8.0" cuda-nvcc cuda-libraries
     micromamba clean -y --force-pkgs-dirs
 ARG MAMBA_DOCKERFILE_ACTIVATE=1
 ENV TORCH_CUDA_ARCH_LIST="7.0 7.5 8.0 8.6 9.0+PTX"
-COPY requirements.txt /tmp/requirements.txt
+COPY requirements.txt post-pytorch-requirements.txt /tmp/
 RUN pip install -U pip wheel setuptools && \
     pip install --no-cache-dir -U -r /tmp/requirements.txt && \
-    pip install --no-cache-dir --no-build-isolation -U flash-attn==2.3.6
+    pip install --no-cache-dir --no-build-isolation -U /tmp/post-pytorch-requirements.txt
 # Hack to make deepspeed compile ops correctly :/
 RUN ln -s /opt/conda/lib /opt/conda/lib64
 # This is a hacky work around! Ideal way is to use

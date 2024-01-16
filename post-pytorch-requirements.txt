@@ -1,0 +1,2 @@
+deepspeed @ git+https://github.com/microsoft/DeepSpeed@a85b6e472534d2e0b61fe234fae4f6a2332c95bf
+flash-attn==2.4.2
