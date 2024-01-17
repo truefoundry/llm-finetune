@@ -16,4 +16,4 @@ RUN pip install -U pip wheel setuptools && \
     pip install --no-cache-dir -U -r /tmp_home/jovyan/llm-finetune/notebook-requirements.txt && \
     pip install --no-cache-dir --no-build-isolation -U -r /tmp_home/jovyan/llm-finetune/post-pytorch-requirements.txt
 ENV JUPYTER_APP_LAUNCHER_PATH=/home/jovyan/llm-finetune/.jp_app_launcher/
-COPY . /tmp_home/jovyan/llm-finetune/
+COPY --chown=jovyan:users . /tmp_home/jovyan/llm-finetune/
