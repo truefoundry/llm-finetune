@@ -127,6 +127,10 @@ class OtherArguments:
         default="NA",
         metadata={"help": "URL to the jsonl evaluation dataset. Overrides eval_size. Leave as NA if not available"},
     )
+    revision: Optional[str] = field(
+        default=None,
+        metadata={"help": "Model Revision to load"},
+    )
     train_on_prompt: bool = field(
         default=False,
         metadata={"help": "If to train on prompt and include it in the loss"},
@@ -302,13 +306,15 @@ def _cleanup_gpus():
 
 def merge_adapters_if_any(
     model_id: str,
+    revision: Optional[str],
     torch_dtype,
     output_dir: str,
 ):
-    check_if_model_will_fit_only_with_gpus(model_id=model_id, torch_dtype=torch_dtype)
+    check_if_model_will_fit_only_with_gpus(model_id=model_id, revision=revision, torch_dtype=torch_dtype)
     logger.info("Loading model and lora layers for merging ...")
     model = AutoPeftModelForCausalLM.from_pretrained(
         output_dir,
+        revision=revision,
         trust_remote_code=True,
         low_cpu_mem_usage=True,
         torch_dtype=torch_dtype,
@@ -494,6 +500,7 @@ def get_model(
         )
         model = AutoModelForCausalLM.from_pretrained(
             model_source,
+            revision=other_arguments.revision,
             trust_remote_code=True,
             torch_dtype=torch_dtype,
             quantization_config=bnb_config,
@@ -514,6 +521,7 @@ def get_model(
             model_load_kwargs.pop("low_cpu_mem_usage", None)
         model = AutoModelForCausalLM.from_pretrained(
             model_source,
+            revision=other_arguments.revision,
             trust_remote_code=True,
             torch_dtype=get_torch_dtype(training_arguments),
             device_map=device_map,
@@ -596,14 +604,17 @@ def get_peft_wrapped_model(
     return model
 
 
-def get_tokenizer(model_source: str):
+def get_tokenizer(model_source: str, revision: Optional[str]):
     logger.info("Loading tokenizer...")
     try:
         # Note: First we try loading with use_fast=False because for some models conversion takes too long
-        tokenizer = AutoTokenizer.from_pretrained(model_source, trust_remote_code=True, use_fast=False)
+        tokenizer = AutoTokenizer.from_pretrained(
+            model_source, revision=revision, trust_remote_code=True, use_fast=False
+        )
     except ValueError:
         tokenizer = AutoTokenizer.from_pretrained(
             model_source,
+            revision=revision,
             trust_remote_code=True,
         )
     logger.info(f"Tokenizer's padding side is {tokenizer.padding_side}")
@@ -675,11 +686,17 @@ def deepspeed_zero3_disabled(training_arguments: HFTrainingArguments):
 
 def check_if_model_will_fit_only_with_gpus(
     model_id: str,
+    revision: Optional[str],
     torch_dtype,
 ):
     with init_empty_weights():
-        model = AutoModelForCausalLM.from_pretrained(
+        config = AutoConfig.from_pretrained(
             model_id,
+            revision=revision,
+            trust_remote_code=True,
+        )
+        model = AutoModelForCausalLM.from_config(
+            config=config,
             trust_remote_code=True,
             torch_dtype=torch_dtype,
             # low_cpu_mem_usage=True,
@@ -796,14 +813,16 @@ def _train(
         )
 
         logger.info("Loading config ...")
-        model_config = AutoConfig.from_pretrained(other_arguments.model_id, trust_remote_code=True)
+        model_config = AutoConfig.from_pretrained(
+            other_arguments.model_id, revision=other_arguments.revision, trust_remote_code=True
+        )
 
         if last_checkpoint_dir:
             model_source = last_checkpoint_dir
         else:
             model_source = other_arguments.model_id
 
-        tokenizer, num_new_tokens = get_tokenizer(model_source)
+        tokenizer, num_new_tokens = get_tokenizer(model_source, revision=other_arguments.revision)
 
         max_length = get_max_length(
             max_length=other_arguments.max_length,
@@ -985,7 +1004,9 @@ def train(training_arguments: HFTrainingArguments, other_arguments: OtherArgumen
         if other_arguments.use_lora or other_arguments.use_qlora:
             with deepspeed_zero3_disabled(training_arguments):
                 check_if_model_will_fit_only_with_gpus(
-                    model_id=other_arguments.model_id, torch_dtype=get_torch_dtype(training_arguments)
+                    model_id=other_arguments.model_id,
+                    revision=other_arguments.revision,
+                    torch_dtype=get_torch_dtype(training_arguments),
                 )
 
     logger.info(get_gpu_metrics())
@@ -1004,6 +1025,7 @@ def train(training_arguments: HFTrainingArguments, other_arguments: OtherArgumen
             with deepspeed_zero3_disabled(training_arguments):
                 merge_adapters_if_any(
                     model_id=other_arguments.model_id,
+                    revision=other_arguments.revision,
                     torch_dtype=get_torch_dtype(training_arguments),
                     output_dir=training_arguments.output_dir,
                 )
