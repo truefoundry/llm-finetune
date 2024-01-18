@@ -350,7 +350,7 @@ def merge_adapters_if_any(
         torch_dtype=torch_dtype,
         device_map="balanced",
     )
-    tokenizer = get_tokenizer(model_source=output_dir, revision=None)
+    tokenizer, _ = get_tokenizer(model_source=output_dir, revision=None)
     model = _fix_generation_config(model=model, tokenizer=tokenizer)
     logger.info("Merging lora adapter into main model. This can take a while ...")
     model = model.merge_and_unload()
