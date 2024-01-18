@@ -351,9 +351,9 @@ def merge_adapters_if_any(
         device_map="balanced",
     )
     tokenizer, _ = get_tokenizer(model_source=output_dir, revision=None)
-    model = _fix_generation_config(model=model, tokenizer=tokenizer)
     logger.info("Merging lora adapter into main model. This can take a while ...")
     model = model.merge_and_unload()
+    model = _fix_generation_config(model=model, tokenizer=tokenizer)
     model.save_pretrained(output_dir, safe_serialization=True)
     for filename in [
         "adapter_config.json",
