@@ -1,4 +1,4 @@
-FROM truefoundrycloud/jupyter:0.2.8-sudo
+FROM truefoundrycloud/jupyter:0.2.14-sudo
 ENV TORCH_CUDA_ARCH_LIST="7.0 7.5 8.0 8.6 9.0+PTX"
 ENV DEBIAN_FRONTEND=noninteractive
 USER root
