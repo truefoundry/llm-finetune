@@ -1,0 +1,81 @@
+# Set externally explicitly
+adapter: qlora
+base_model: TinyLlama/TinyLlama-1.1B-Chat-v1.0
+datasets: []
+debug: False
+micro_batch_size: 1
+model_revision:
+sequence_len: 2048
+test_datasets: []
+
+# Auto computed and set by script based on environment and external state
+bf16: True
+bfloat16: True
+eval_steps: 0.1
+flash_attn_fuse_mlp: False
+flash_attn_fuse_qkv: False
+float16: False
+fp16: False
+load_in_4bit: False
+lora_modules_to_save: []
+resume_from_checkpoint:
+save_steps: 0.1
+special_tokens: {}
+tf32: True
+
+# Defaults
+bnb_config_kwargs:
+  bnb_4bit_quant_type: nf4
+  bnb_4bit_use_double_quant: True
+  llm_int8_has_fp16_weight: False
+adam_beta1: 0.9
+adam_beta2: 0.99
+auto_resume_from_checkpoints: False
+base_model_ignore_patterns:
+  - '*.h5'
+  - '*.ot'
+  - '*.tflite'
+  - '*.msgpack'
+chat_template: chatml
+dataset_prepared_path: ./data/last_run_prepared
+ddp_find_unused_parameters: False
+ddp_timeout: 21600
+deepspeed: ./deepspeed_configs/3_ds_z2_config.json
+default_system_message: You are a helpful assistant. Please give a long and detailed answer.
+early_stopping_patience: 5
+eval_sample_packing: False
+flash_attention: True
+flash_attn_cross_entropy: True
+flash_attn_rms_norm: True
+gradient_accumulation_steps: 4
+gradient_checkpointing: True
+learning_rate: 0.00003
+load_best_model_at_end: True
+load_in_8bit: False
+logging_steps: 5
+lora_alpha: 64
+lora_on_cpu: False
+lora_r: 32
+lora_target_linear: True
+lr_scheduler: cosine
+max_grad_norm: 1.0
+model_type: AutoModelForCausalLM
+num_epochs: 10
+optimizer: adamw_torch_fused
+output_dir: ./model
+report_to: tensorboard
+resize_token_embeddings_to_32x: False
+sample_packing: True
+save_safetensors: True
+save_total_limit: 1
+seed: 42
+strict: False
+tokenizer_type: AutoTokenizer
+train_on_inputs: False
+trust_remote_code: True
+val_set_size: 0.1
+warmup_ratio: 0.1
+weight_decay: 0.01
+
+# Not supported currently
+logging_dir: ./tensorboard_logs

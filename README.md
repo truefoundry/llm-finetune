@@ -1,4 +1,195 @@
+Axolotl config options
+
+Just dumping here, because some options are not documented
+
+```
+cfg.adam_beta1
+cfg.adam_beta2
+cfg.adam_epsilon
+cfg.adapter
+cfg.auto_resume_from_checkpoints
+cfg.axolotl_config_path
+cfg.base_model
+cfg.base_model_config
+cfg.batch_size
+cfg.bench_dataset
+cfg.bf16
+cfg.bfloat16
+cfg.bloat16
+cfg.bnb_config_kwargs
+cfg.chat_template
+cfg.conversation
+cfg.cosine_min_lr_ratio
+cfg.dataloader_drop_last
+cfg.dataloader_num_workers
+cfg.dataloader_pin_memory
+cfg.dataloader_prefetch_factor
+cfg.dataset_keep_in_memory
+cfg.dataset_prepared_path
+cfg.dataset_processes
+cfg.dataset_shard_idx
+cfg.dataset_shard_num
+cfg.datasets
+cfg.ddp
+cfg.ddp_broadcast_buffers
+cfg.ddp_bucket_cap_mb
+cfg.ddp_timeout
+cfg.debug
+cfg.deepspeed
+cfg.default_system_message
+cfg.device
+cfg.device_map
+cfg.do_bench_eval
+cfg.dpo_beta
+cfg.dpo_label_smoothing
+cfg.eager_attention
+cfg.early_stopping_patience
+cfg.eval_batch_size
+cfg.eval_sample_packing
+cfg.eval_steps
+cfg.eval_table_max_new_tokens
+cfg.eval_table_size
+cfg.evals_per_epoch
+cfg.evaluation_strategy
+cfg.field_input
+cfg.field_instruction
+cfg.field_output
+cfg.field_system
+cfg.flash_attention
+cfg.flash_attn_cross_entropy
+cfg.flash_attn_fuse_mlp
+cfg.flash_attn_fuse_qkv
+cfg.flash_attn_rms_norm
+cfg.flash_optimum
+cfg.float16
+cfg.format
+cfg.fp16
+cfg.fsdp
+cfg.fsdp_config
+cfg.gptq
+cfg.gptq_disable_exllama
+cfg.gpu_memory_limit
+cfg.gradient_accumulation_steps
+cfg.gradient_checkpointing
+cfg.gradient_checkpointing_kwargs
+cfg.greater_is_better
+cfg.group_by_length
+cfg.hf_use_auth_token
+cfg.hub_model_id
+cfg.hub_strategy
+cfg.is_falcon_derived_model
+cfg.is_file
+cfg.is_llama_derived_model
+cfg.is_mistral_derived_model
+cfg.is_preprocess
+cfg.is_qwen_derived_model
+cfg.learning_rate
+cfg.load_best_model_at_end
+cfg.load_in_4bit
+cfg.load_in_8bit
+cfg.local_rank
+cfg.logging_steps
+cfg.lora_alpha
+cfg.lora_dropout
+cfg.lora_fan_in_fan_out
+cfg.lora_model_dir
+cfg.lora_modules_to_save
+cfg.lora_on_cpu
+cfg.lora_r
+cfg.lora_target_linear
+cfg.lora_target_modules
+cfg.loss_watchdog_patience
+cfg.loss_watchdog_threshold
+cfg.lr_quadratic_warmup
+cfg.lr_scheduler
+cfg.lr_scheduler_kwargs
+cfg.max_grad_norm
+cfg.max_memory
+cfg.max_packed_sequence_len
+cfg.max_steps
+cfg.merge_lora
+cfg.metric_for_best_model
+cfg.micro_batch_size
+cfg.mlflow_experiment_name
+cfg.model_config
+cfg.model_config_type
+cfg.model_kwargs
+cfg.model_revision
+cfg.model_type
+cfg.neftune_noise_alpha
+cfg.no_input_format
+cfg.noisy_embedding_alpha
+cfg.num_epochs
+cfg.optimizer
+cfg.output_dir
+cfg.pad_to_sequence_len
+cfg.path
+cfg.peft
+cfg.peft_adapter
+cfg.peft_layers_to_transform
+cfg.precompute_ref_log_probs
+cfg.pretraining_dataset
+cfg.push_dataset_to_hub
+cfg.push_to_hub_model_id
+cfg.read_text
+cfg.relora_cpu_offload
+cfg.relora_steps
+cfg.relora_warmup_steps
+cfg.remove_unused_columns
+cfg.resize_token_embeddings_to_32x
+cfg.resume_from_checkpoint
+cfg.rl
+cfg.rl_adapter_ref_model
+cfg.rope_scaling
+cfg.s2_attention
+cfg.sample_packing
+cfg.sample_packing_eff_est
+cfg.save_safetensors
+cfg.save_steps
+cfg.save_strategy
+cfg.save_total_limit
+cfg.saves_per_epoch
+cfg.sdp_attention
+cfg.seed
+cfg.sequence_len
+cfg.special_tokens
+cfg.strict
+cfg.system_format
+cfg.system_prompt
+cfg.test_datasets
+cfg.tf32
+cfg.tokenizer_config
+cfg.tokenizer_legacy
+cfg.tokenizer_type
+cfg.tokenizer_use_fast
+cfg.tokens
+cfg.torch_compile
+cfg.torch_compile_backend
+cfg.torch_dtype
+cfg.torchdistx_path
+cfg.total_num_tokens
+cfg.total_supervised_tokens
+cfg.train_on_inputs
+cfg.trust_remote_code
+cfg.type
+cfg.unfrozen_parameters
+cfg.use_mlflow
+cfg.use_wandb
+cfg.val_set_size
+cfg.wandb_name
+cfg.wandb_project
+cfg.wandb_run_id
+cfg.warmup_ratio
+cfg.warmup_steps
+cfg.weight_decay
+cfg.world_size
+cfg.xformers_attention
+cfg.zero_optimization
+```
+
 ## LLM Finetuning with Truefoundry
+
+// TODO Update this command
 
 Test QLoRA w/ Deepspeed Stage 2
 
@@ -70,12 +261,8 @@ train.py \
 ...
 ```
 
-- A lot of args are set with defaults in `train.args`
 - `TORCH_PER_PROCESS_MEMORY_LIMIT` allows limiting the max memory per gpu. Can be a fraction (denoting percentage) or integer (denoting limit in MiB). Useful for testing limited gpu memory scenarios
 - CUDA_VISIBLE_DEVICES can be used to control the amount of GPUs
-- `--mixed_precision bf16` and `--bf16 true`. On V100 and T4,  use `--mixed_precision fp16` and `--fp16 true`
-- `--use_flash_attention true/false`. This is currently only supported for a select few models like Llama and Mistral/Zephyr. By default this is false
-- `--per_device_train_batch_size int` - Because auto batch size finder is enabled, the trainer will try the highest batch size starting from this value, halving it if it does not fit. For e.g. with 8, trainer will try 8, 4, 2, 1 and then crash. Note this only works without Deepspeed!
 - `--mlfoundry_enable_reporting true/false` toggles reporting metrics, checkpoints and models to mlfoundry
 - When you are testing locally, you can set `--cleanup_output_dir_on_start true` if you don't care about checkpoints between runs
 
@@ -86,10 +273,7 @@ Speedup is second priority but we take what we can easily get
 
 #### Non experimental todo
 
-- Sample Packing
-- Dataset Streaming
-- IA3 PEFT
-- Intelligently patch deepspeed zero arguments that affect memory footprint
+???
 
 #### Experimental things we want to try
 
@@ -111,13 +295,4 @@ Speedup is second priority but we take what we can easily get
 
 #### Known issues
 
-- We are running a modified commit of Deepspeed with fix for a memory leak till the PR gets upstreamed
-- We are running a non released commit of transformers till > 4.36.2 is released
-    - Fixes deepspeed checkpoint size
-    - Monkey patched deepspeed checkpoint loading for resuming
-- QLoRA cannot work with Zero stage 3 -> Quantized Parameters cannot be sharded at the moment
-- Auto batch size finder does not work with Deepspeed
-    - There is wrapping bug which does not re-intialize Deepspeed again on new trial. That will be fixed but is unlikely to work well the way auto batch size finder is implemented
-- Deepspeed 0.12.4+ FusedAdam has index error bug - Hard to reproduce!
-- Some users have reported loss diverges after some time when compared to DDP
-- Zero stage 3 ends up giving much worse
+???

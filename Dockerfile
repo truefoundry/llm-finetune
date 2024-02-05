@@ -1,22 +1,8 @@
-FROM --platform=linux/amd64 mambaorg/micromamba:1.5.3-jammy
+# https://hub.docker.com/layers/winglian/axolotl/main-py3.11-cu121-2.1.2/images/sha256-1a47b6e45a4e858568e47abe62315bf083441b6561e43ad8684a5ef41cc573a1?context=explore
+FROM --platform=linux/amd64 docker pull winglian/axolotl:1a47b6e45a4e858568e47abe62315bf083441b6561e43ad8684a5ef41cc573a1
 USER root
-RUN apt update && \
-    apt install -y --no-install-recommends curl wget git gcc g++ && \
-    rm -rf /var/lib/apt/lists/*
-RUN micromamba install -y -c "nvidia/label/cuda-11.8.0" cuda-nvcc cuda-libraries-dev -n base && \
-    micromamba install -y -c "conda-forge" python=3.10 -n base && \
-    micromamba clean -y --all && \
-    micromamba clean -y --force-pkgs-dirs
-ARG MAMBA_DOCKERFILE_ACTIVATE=1
-ENV TORCH_CUDA_ARCH_LIST="7.0 7.5 8.0 8.6 9.0+PTX"
-COPY requirements.txt post-pytorch-requirements.txt /tmp/
+COPY requirements.txt /tmp/
 RUN pip install -U pip wheel setuptools && \
-    pip install --no-cache-dir -U -r /tmp/requirements.txt && \
-    pip install --no-cache-dir --no-build-isolation -U -r /tmp/post-pytorch-requirements.txt
-# Hack to make deepspeed compile ops correctly :/
-RUN ln -s /opt/conda/lib /opt/conda/lib64
-# This is a hacky work around! Ideal way is to use
-# /usr/local/bin/_entrypoint.sh as the main entrypoint (command in K8s)
-ENV PATH "$MAMBA_ROOT_PREFIX/bin:$PATH"
+    pip install --no-cache-dir --no-build-isolation -U -r /tmp/requirements.txt
 WORKDIR /app
 COPY . /app
