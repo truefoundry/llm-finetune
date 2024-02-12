@@ -12,3 +12,4 @@ dev.sh
 *.log
 data/
 tensorboard_logs/
+mlruns/

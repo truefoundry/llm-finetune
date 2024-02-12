@@ -1,28 +1,40 @@
-# Set externally explicitly
+# Mostly set externally explicitly
 adapter: qlora
 base_model: TinyLlama/TinyLlama-1.1B-Chat-v1.0
-datasets: []
 debug: False
 micro_batch_size: 1
 model_revision:
 sequence_len: 2048
-test_datasets: []
+## Added by TrueFoundry, not native to Axolotl
+train_data_uri:
+eval_data_uri: null
+val_set_size: 0.1
+mlfoundry_enable_reporting: False
+mlfoundry_ml_repo: null
 
+# ---------------------
 # Auto computed and set by script based on environment and external state
-bf16: True
-bfloat16: True
-eval_steps: 0.1
-flash_attn_fuse_mlp: False
-flash_attn_fuse_qkv: False
-float16: False
-fp16: False
-load_in_4bit: False
-lora_modules_to_save: []
-resume_from_checkpoint:
-save_steps: 0.1
-special_tokens: {}
-tf32: True
+# Only edit them if you know what you are doing
+data_dir: auto # type: string
+datasets: auto # type: list
+test_datasets: auto # type: list
+bf16: auto # type: bool
+bfloat16: auto # type: bool
+flash_attn_fuse_mlp: auto # type: bool
+flash_attn_fuse_qkv: auto # type: bool
+float16: auto # type: bool
+fp16: auto # type: bool
+load_in_4bit: auto # type: bool
+lora_modules_to_save: auto # type: list
+resume_from_checkpoint: auto # type: bool
+special_tokens: auto  # type: dict
+tf32: auto # type: bool
+## Added by TrueFoundry, not native to Axolotl
+mlfoundry_run_name: auto # type: string
+mlfoundry_checkpoint_artifact_name: auto # type: string
 
+
+# ---------------------
 # Defaults
 bnb_config_kwargs:
   bnb_4bit_quant_type: nf4
@@ -38,12 +50,13 @@ base_model_ignore_patterns:
   - '*.msgpack'
 chat_template: chatml
 dataset_prepared_path: ./data/last_run_prepared
-ddp_find_unused_parameters: False
 ddp_timeout: 21600
 deepspeed: ./deepspeed_configs/3_ds_z2_config.json
 default_system_message: You are a helpful assistant. Please give a long and detailed answer.
 early_stopping_patience: 5
 eval_sample_packing: False
+eval_steps: 0.1
+eval_strategy: steps
 flash_attention: True
 flash_attn_cross_entropy: True
 flash_attn_rms_norm: True
@@ -54,6 +67,7 @@ load_best_model_at_end: True
 load_in_8bit: False
 logging_steps: 5
 lora_alpha: 64
+lora_dropout: 0.05
 lora_on_cpu: False
 lora_r: 32
 lora_target_linear: True
@@ -62,20 +76,25 @@ max_grad_norm: 1.0
 model_type: AutoModelForCausalLM
 num_epochs: 10
 optimizer: adamw_torch_fused
-output_dir: ./model
+output_dir: ./outputs
+pad_to_sequence_len: True
 report_to: tensorboard
 resize_token_embeddings_to_32x: False
 sample_packing: True
 save_safetensors: True
+save_steps: 0.1
+save_strategy: steps
 save_total_limit: 1
 seed: 42
 strict: False
 tokenizer_type: AutoTokenizer
 train_on_inputs: False
 trust_remote_code: True
-val_set_size: 0.1
+use_mlflow: False
+use_wandb: False
 warmup_ratio: 0.1
 weight_decay: 0.01
-
-# Not supported currently
+## Added by TrueFoundry, not native to Axolotl
+cleanup_output_dir_on_start: False
 logging_dir: ./tensorboard_logs
+mlfoundry_log_checkpoints: True

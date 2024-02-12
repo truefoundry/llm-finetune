@@ -13,7 +13,7 @@ from huggingface_hub import scan_cache_dir
 from transformers import TrainerCallback
 from transformers.integrations import rewrite_logs
 
-logger = logging.getLogger("truefoundry-finetune")
+logger = logging.getLogger("axolotl")
 
 MLFOUNDRY_ARTIFACT_PREFIX = "artifact:"
 TFY_INTERNAL_JOB_NAME = os.getenv("TFY_INTERNAL_COMPONENT_NAME")
@@ -26,10 +26,13 @@ def is_mlfoundry_artifact(value: str):
         return True
 
 
-def download_mlfoundry_artifact(artifact_version_fqn: str, download_dir: str, move_to: Optional[str] = None):
+def download_mlfoundry_artifact(
+    artifact_version_fqn: str, download_dir: str, overwrite: bool = False, move_to: Optional[str] = None
+):
     client = mlfoundry.get_client()
     artifact_version = client.get_artifact_version_by_fqn(artifact_version_fqn)
-    files_dir = artifact_version.download(download_dir)
+    os.makedirs(download_dir, exist_ok=True)
+    files_dir = artifact_version.download(download_dir, overwrite=overwrite)
     if move_to:
         files_dir = shutil.move(files_dir, move_to)
     return files_dir
