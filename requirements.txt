@@ -2,4 +2,5 @@
 torch==2.1.2+cu121
 cloud-files==4.15.2
 mlfoundry==0.10.4
-snowflake-connector-python[pandas]==3.3.1
+snowflake-connector-python[pandas]==3.7.0
+pyarrow==15.0.0

@@ -1,5 +1,5 @@
-# https://hub.docker.com/layers/winglian/axolotl/main-py3.11-cu121-2.1.2/images/sha256-1a47b6e45a4e858568e47abe62315bf083441b6561e43ad8684a5ef41cc573a1?context=explore
-FROM --platform=linux/amd64 docker pull winglian/axolotl:6508c133725453bc9bb48e13be8542e3b243da552140da3ac06834b4551399aa
+# https://hub.docker.com/layers/winglian/axolotl/main-py3.11-cu121-2.1.2/images/sha256-93f4859791ce95d591a71b04afceaa68803c205f3c9490ec71539ea53bcebd4f?context=explore
+FROM --platform=linux/amd64 winglian/axolotl@sha256:93f4859791ce95d591a71b04afceaa68803c205f3c9490ec71539ea53bcebd4f
 USER root
 COPY requirements.txt /tmp/
 RUN pip install -U pip wheel setuptools && \
