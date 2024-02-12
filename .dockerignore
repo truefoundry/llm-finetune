@@ -3,6 +3,7 @@
 venv/
 *.py[cod]
 model/
+models/
 .cache/
 *.safetensors
 pytorch_model*.bin
@@ -11,3 +12,6 @@ dev.sh
 *.log
 data/
 tensorboard_logs
+mlruns/
+output/
+outputs/

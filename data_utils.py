@@ -15,7 +15,7 @@ from sklearn.model_selection import train_test_split
 
 from mlfoundry_utils import download_mlfoundry_artifact, is_mlfoundry_artifact
 
-logger = logging.getLogger("truefoundry-finetune")
+logger = logging.getLogger("axolotl")
 
 PROMPT_KEY = "prompt"
 COMPLETION_KEY = "completion"
@@ -82,16 +82,23 @@ def get_data_from_snowflake_table(
             connection.close()
 
 
-def _read_lines_from_files(download_path):
-    for root, dirs, files in os.walk(download_path):
+def find_all_jsonl_files(path):
+    for root, dirs, files in os.walk(path):
         for file in files:
             filepath = os.path.join(root, file)
             filename = os.path.basename(filepath)
             if filename.endswith(".jsonl") and not filename.startswith("."):
-                logger.info(f"Loading file {filename} ...")
-                with open(filepath) as f:
-                    for line in f.readlines():
-                        yield line
+                yield filepath
+
+
+def _read_lines_from_files(download_path):
+    for filepath in find_all_jsonl_files(download_path):
+        filename = os.path.basename(filepath)
+        if filename.endswith(".jsonl") and not filename.startswith("."):
+            logger.info(f"Loading file {filename} ...")
+            with open(filepath) as f:
+                for line in f.readlines():
+                    yield line
 
 
 def _read_lines_from_cloudfile(path):

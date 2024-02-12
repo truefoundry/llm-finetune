@@ -1,3 +1,0 @@
--r requirements.txt
-jupyter-server-proxy==4.1.0
-jupyter_app_launcher @ git+https://github.com/truefoundry/jupyter_app_launcher@9a959b894542995fc763ed07324bbd274e96610d
