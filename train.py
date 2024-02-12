@@ -15,7 +15,7 @@ from axolotl.utils.distributed import barrier, is_main_process, zero_first
 from transformers.integrations.integration_utils import TensorBoardCallback
 from transformers.utils import is_torch_bf16_gpu_available, is_torch_tf32_available
 
-from checkpoint_utils import cleanup_checkpoints
+from checkpoint_utils import cleanup_checkpoints, get_last_checkpoint_for_resume_if_any
 from data_utils import find_all_jsonl_files
 from mlfoundry_utils import (
     MLFoundryCallback,
@@ -170,6 +170,19 @@ def make_axolotl_config(config_base, kwargs, timestamp=None):
                 cfg.mlfoundry_log_checkpoints = False
                 cfg.mlfoundry_checkpoint_artifact_name = None
 
+        if cfg.resume_from_checkpoint == "auto":
+            resume_from_checkpoint = True
+        else:
+            resume_from_checkpoint = cfg.resume_from_checkpoint
+        last_checkpoint_dir = get_last_checkpoint_for_resume_if_any(
+            output_dir=cfg.output_dir,
+            resume_from_checkpoint=resume_from_checkpoint,
+            mlfoundry_enable_reporting=cfg.mlfoundry_enable_reporting,
+            mlfoundry_ml_repo=cfg.mlfoundry_ml_repo,
+            mlfoundry_checkpoint_artifact_name=cfg.mlfoundry_checkpoint_artifact_name,
+        )
+        cfg.resume_from_checkpoint = last_checkpoint_dir
+
         set_cfg_option_if_auto(cfg, "eval_steps", 0.1)
         set_cfg_option_if_auto(cfg, "save_steps", 0.1)
         set_cfg_option_if_auto(cfg, "tf32", is_torch_tf32_available())
@@ -205,7 +218,6 @@ def make_axolotl_config(config_base, kwargs, timestamp=None):
             # Remove this when resolved upstream
             set_cfg_option_if_auto(cfg, "early_stopping_patience", None, force=True)
 
-        # TODO: Implement correct resuming
         # TODO: Upload processed data to resume from
         set_cfg_option_if_auto(cfg, "resume_from_checkpoint", None)
 
@@ -387,29 +399,3 @@ if __name__ == "__main__":
 #             "For lora/qlora the model must entirely fit on gpus without any kind of offloading to prevent bugs with merging! "
 #             "With the current configuration model is being offloaded to cpu/disk. This causes incorrect model saving. See https://github.com/huggingface/peft/issues/868"
 #         )
-
-
-# def dist_get_last_checkpoint_for_resume_if_any(
-#     training_arguments: HFTrainingArguments,
-#     other_arguments: OtherArguments,
-# ):
-#     last_checkpoint_dir = None
-#     dist_s = training_arguments.distributed_state
-#     last_checkpoint_info_path = os.path.join(CACHE_DIR, "last_checkpoint_info.json")
-#     if dist_s.is_main_process:
-#         last_checkpoint_dir = get_last_checkpoint_for_resume_if_any(
-#             output_dir=training_arguments.output_dir,
-#             resume_from_checkpoint=training_arguments.resume_from_checkpoint,
-#             mlfoundry_enable_reporting=other_arguments.mlfoundry_enable_reporting,
-#             mlfoundry_ml_repo=other_arguments.mlfoundry_ml_repo,
-#             mlfoundry_checkpoint_artifact_name=other_arguments.mlfoundry_checkpoint_artifact_name,
-#         )
-#         with open(last_checkpoint_info_path, "w") as f:
-#             last_checkpoint_info = {"last_checkpoint_dir": last_checkpoint_dir}
-#             json.dump(last_checkpoint_info, f)
-#     else:
-#         with open(last_checkpoint_info_path, "r") as f:
-#             last_checkpoint_info = json.load(f)
-#         last_checkpoint_dir = last_checkpoint_info["last_checkpoint_dir"]
-
-#     return last_checkpoint_dir
