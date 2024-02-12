@@ -95,7 +95,9 @@ def dataset_uri_to_axolotl_datasources(uri, download_dir):
             artifact_version_fqn=uri, download_dir=artifact_download_dir, overwrite=True
         )
         for filepath in find_all_jsonl_files(download_path):
+            logger.info("Adding jsonl file {filepath}")
             datasources.append(_make_dataset_file_source(path=filepath))
+        return datasources
     elif os.path.exists(uri):
         datasources = []
         if os.path.isdir(uri):
@@ -103,6 +105,7 @@ def dataset_uri_to_axolotl_datasources(uri, download_dir):
                 datasources.append(_make_dataset_file_source(path=filepath))
         else:
             datasources = [_make_dataset_file_source(path=uri)]
+        return datasources
     else:
         raise ValueError("Unsupported data uri or path does not exist: {uri}")
 
@@ -185,7 +188,7 @@ def make_axolotl_config(config_base, kwargs, timestamp=None):
                 raise ValueError("`train_data_uri` cannot be null when set to `datasets` is set to auto")
             cfg.datasets = dataset_uri_to_axolotl_datasources(uri=cfg.train_data_uri, download_dir=cfg.data_dir)
         if cfg.test_datasets == "auto":
-            if cfg.eval_data_uri:
+            if cfg.eval_data_uri and str(cfg.eval_data_uri).lower() != "na":
                 cfg.test_datasets = dataset_uri_to_axolotl_datasources(uri=cfg.eval_data_uri, download_dir=cfg.data_dir)
             elif cfg.val_set_size:
                 set_cfg_option_if_auto(cfg, "test_datasets", [], force=True)
@@ -227,19 +230,21 @@ def patched_pretrain_hooks(cfg, trainer: AxolotlTrainer):
     if is_main_process():
         logger.info(f"Config: {cfg}")
 
-    if is_main_process() and cfg.mlfoundry_enable_reporting is True:
-        run = get_or_create_run(
-            ml_repo=cfg.mlfoundry_ml_repo,
-            run_name=cfg.mlfoundry_run_name,
-            auto_end=False,
-            create_ml_repo=False,
-        )
-        em_cb = ExtraMetricsCallback()
-        mlfoundry_cb = MLFoundryCallback(
-            run=run,
-            log_checkpoints=cfg.mlfoundry_log_checkpoints,
-            checkpoint_artifact_name=cfg.mlfoundry_checkpoint_artifact_name,
-        )
+    if is_main_process():
+        mlfoundry_cb = None
+        if cfg.mlfoundry_enable_reporting is True:
+            run = get_or_create_run(
+                ml_repo=cfg.mlfoundry_ml_repo,
+                run_name=cfg.mlfoundry_run_name,
+                auto_end=False,
+                create_ml_repo=False,
+            )
+            mlfoundry_cb = MLFoundryCallback(
+                run=run,
+                log_checkpoints=cfg.mlfoundry_log_checkpoints,
+                checkpoint_artifact_name=cfg.mlfoundry_checkpoint_artifact_name,
+            )
+        extra_metrics_cb = ExtraMetricsCallback()
         tensorboard_cb_idx = None
         for i, cb in enumerate(trainer.callback_handler.callbacks):
             if isinstance(cb, TensorBoardCallback):
@@ -254,19 +259,23 @@ def patched_pretrain_hooks(cfg, trainer: AxolotlTrainer):
 
         if tensorboard_cb_idx:
             # [..., TB_CB, ...]
-            trainer.callback_handler.callbacks[tensorboard_cb_idx : tensorboard_cb_idx + 1] = [
-                em_cb,
+            new_callbacks = [
+                extra_metrics_cb,
                 trainer.callback_handler.callbacks[tensorboard_cb_idx],
-                mlfoundry_cb,
             ]
-            # [..., EM_CB, TB_CB, MLF_CB, ...]
+            if mlfoundry_cb:
+                new_callbacks.append(mlfoundry_cb)
+            trainer.callback_handler.callbacks[tensorboard_cb_idx : tensorboard_cb_idx + 1] = new_callbacks
+            # [..., EM_CB, TB_CB, MLF_CB?, ...]
         elif ax_gpu_stats_cb_idx:
             # [..., AGS_CB, ...]
-            trainer.callback_handler.callbacks[ax_gpu_stats_cb_idx:ax_gpu_stats_cb_idx] = [
-                em_cb,
-                mlfoundry_cb,
+            new_callbacks = [
+                extra_metrics_cb,
             ]
-            # [..., EM_CB, MLF_CB, AGS_CB, ...]
+            if mlfoundry_cb:
+                new_callbacks.append(mlfoundry_cb)
+            trainer.callback_handler.callbacks[ax_gpu_stats_cb_idx:ax_gpu_stats_cb_idx] = new_callbacks
+            # [..., EM_CB, MLF_CB?, AGS_CB, ...]
         else:
             logger.warning("Mlfoundry callback injection failed!")
 

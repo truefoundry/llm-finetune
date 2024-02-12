@@ -13,3 +13,4 @@ dev.sh
 data/
 tensorboard_logs/
 mlruns/
+outputs/
