@@ -1,5 +1,8 @@
 Axolotl config options
 
+<details>
+    <summary>Click to expand all axolotl options</summary>
+
 Just dumping here, because some options are not documented
 
 ```
@@ -15,7 +18,6 @@ cfg.batch_size
 cfg.bench_dataset
 cfg.bf16
 cfg.bfloat16
-cfg.bloat16
 cfg.bnb_config_kwargs
 cfg.chat_template
 cfg.conversation
@@ -186,80 +188,90 @@ cfg.world_size
 cfg.xformers_attention
 cfg.zero_optimization
 ```
+</details>
 
 ## LLM Finetuning with Truefoundry
-
-// TODO Update this command
-
 Test QLoRA w/ Deepspeed Stage 2
 
 ```
+#!/bin/bash
+
 # export CUDA_LAUNCH_BLOCKING=1
 # export NCCL_DEBUG=INFO
-AUTO_FIND_BATCH_SIZE=false
+# export TORCH_PER_PROCESS_MEMORY_LIMIT=22000
+export CUDA_VISIBLE_DEVICES=0
+export DISABLE_MLFLOW_INTEGRATION=True
+
 TRAIN_BATCH_SIZE=1
 GRADIENT_ACCUMULATION_STEPS=4
 LORA_R=32
 LORA_ALPHA=64
 TORCH_PER_PROCESS_MEMORY_LIMIT=0.95
 CUDA_VISIBLE_DEVICES=0,1
-TRAIN_DATA="./data.jsonl"
-MAX_NUM_SAMPLES=0
-MODEL_ID=mistralai/Mistral-7B-Instruct-v0.2
-USE_FLASH_ATTENTION=true
-GRADIENT_CHECKPOINTING=true
+TRAIN_DATA="./data/standford_alpaca_train_49k.jsonl"
+# TRAIN_DATA="./data/lima_llama2_1k.jsonl"
+MAX_STEPS=10
+# MODEL_ID=TinyLlama/TinyLlama-1.1B-intermediate-step-1431k-3T
+# MODEL_ID=cognitivecomputations/Wizard-Vicuna-30B-Uncensored
+# MODEL_ID=EleutherAI/pythia-70m
+MODEL_ID=NousResearch/Llama-2-7b-chat-hf
+# MODEL_ID=NousResearch/Llama-2-13b-chat-hf
+# MODEL_ID=mistralai/Mistral-7B-Instruct-v0.2
+# MODEL_ID=NousResearch/Llama-2-70b-chat-hf
+# MODEL_ID=mistralai/Mixtral-8x7B-Instruct-v0.1
+# MODEL_ID=stas/tiny-random-llama-2
+# MODEL_ID=microsoft/phi-1_5
+# MODEL_ID=microsoft/phi-2
+# MODEL_ID=Deci/DeciLM-7B
+USE_FLASH_ATTENTION=True
+GRADIENT_CHECKPOINTING=True
 NUM_TRAIN_EPOCHS=3
+
+
+# --deepspeed ./deepspeed_configs/3_ds_z2_config.json \
+# --deepspeed ./deepspeed_configs/4_ds_z2_offload_optimizer_config.json \
+# --deepspeed ./deepspeed_configs/5_ds_z3_config.json \
+# --deepspeed ./deepspeed_configs/6_ds_z3_offload_param_config.json \
+# --deepspeed ./deepspeed_configs/7_ds_z3_offload_optimizer_config.json \
+# --deepspeed ./deepspeed_configs/8_ds_z3_offload_param_offload_optimizer_config.json \
 
 accelerate launch \
 --mixed_precision bf16 \
 --use_deepspeed \
 train.py \
---deepspeed ./3_ds_z2_config.json \
---bf16 true \
---use_flash_attention $USE_FLASH_ATTENTION \
---model_id $MODEL_ID \
---train_data $TRAIN_DATA \
---max_num_samples $MAX_NUM_SAMPLES \
---eval_data NA \
---eval_size 0.1 \
---num_train_epochs $NUM_TRAIN_EPOCHS \
+config-base.yaml \
+--deepspeed ./deepspeed_configs/3_ds_z2_config.json \
+--flash_attention $USE_FLASH_ATTENTION \
+--base_model $MODEL_ID \
+--train_data_uri $TRAIN_DATA \
+--max_steps $MAX_STEPS \
+--val_data_uri None \
+--val_set_size 0.1 \
+--micro_batch_size $TRAIN_BATCH_SIZE \
+--num_epochs $NUM_TRAIN_EPOCHS \
 --gradient_accumulation_steps $GRADIENT_ACCUMULATION_STEPS \
 --gradient_checkpointing $GRADIENT_CHECKPOINTING \
 --learning_rate 0.00001 \
---output_dir ./model \
---train_on_prompt false \
---logging_strategy steps \
+--output_dir ./outputs \
+--train_on_inputs False \
 --logging_steps 1 \
 --save_strategy steps \
 --save_steps 0.05 \
 --evaluation_strategy steps \
 --eval_steps 0.05 \
---use_qlora true \
---lora_target_modules auto \
+--adapter qlora \
+--lora_target_linear True \
 --lora_r $LORA_R \
 --lora_alpha $LORA_ALPHA \
---mlfoundry_enable_reporting false \
+--mlfoundry_enable_reporting False \
 --mlfoundry_ml_repo my-ml-repo \
 --mlfoundry_run_name test \
 --mlfoundry_checkpoint_artifact_name chk-test \
---mlfoundry_log_checkpoints false \
---resume_from_checkpoint false \
---auto_find_batch_size $AUTO_FIND_BATCH_SIZE \
---per_device_train_batch_size $TRAIN_BATCH_SIZE \
---per_device_eval_batch_size $TRAIN_BATCH_SIZE \
---cleanup_output_dir_on_start true \
---torch_compile false
+--mlfoundry_log_checkpoints False \
+--resume_from_checkpoint False \
+--cleanup_output_dir_on_start True
 ```
 
-To use ddp, remove `--use_deepspeed` and `--deepspeed`
-
-```
-accelerate launch \
---mixed_precision bf16 \
-train.py \
---use_ddp true \
-...
-```
 
 - `TORCH_PER_PROCESS_MEMORY_LIMIT` allows limiting the max memory per gpu. Can be a fraction (denoting percentage) or integer (denoting limit in MiB). Useful for testing limited gpu memory scenarios
 - CUDA_VISIBLE_DEVICES can be used to control the amount of GPUs
@@ -270,10 +282,6 @@ train.py \
 
 Generally we always try to optimize for memory footprint because that allows higher batch size and more gpu utilization
 Speedup is second priority but we take what we can easily get
-
-#### Non experimental todo
-
-???
 
 #### Experimental things we want to try
 
@@ -291,8 +299,3 @@ Speedup is second priority but we take what we can easily get
         - https://github.com/kaiokendev/alpaca_lora_4bit
 - DP + TP + PP aka Megatron
     - Difficult to configure, Megatron-Deepspeed provides lower throughput but easier to work with
-
-
-#### Known issues
-
-???

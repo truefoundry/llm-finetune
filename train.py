@@ -32,7 +32,6 @@ logger = logging.getLogger("axolotl")
 # TODO:
 # Save axolotl config when we create the callback
 # Support chat format data
-# Check if model fits in given gpus with TP to avoid and future crashes
 
 # CURRENT LIMITATIONS
 # Axolotl sets report_to to None instead of "none"
@@ -191,13 +190,13 @@ def make_axolotl_config(config_base, kwargs, timestamp=None):
                 raise ValueError("`train_data_uri` cannot be null when set to `datasets` is set to auto")
             cfg.datasets = dataset_uri_to_axolotl_datasources(uri=cfg.train_data_uri, download_dir=cfg.data_dir)
         if cfg.test_datasets == "auto":
-            if cfg.eval_data_uri and str(cfg.eval_data_uri).lower() != "na":
-                cfg.test_datasets = dataset_uri_to_axolotl_datasources(uri=cfg.eval_data_uri, download_dir=cfg.data_dir)
+            if cfg.val_data_uri and str(cfg.val_data_uri).lower() != "na":
+                cfg.test_datasets = dataset_uri_to_axolotl_datasources(uri=cfg.val_data_uri, download_dir=cfg.data_dir)
             elif cfg.val_set_size:
-                set_cfg_option_if_auto(cfg, "test_datasets", [], force=True)
+                set_cfg_option_if_auto(cfg, "test_datasets", None, force=True)
             else:
                 raise ValueError(
-                    "At least one of `eval_data_uri` or `val_set_size` must be non null when `test_datasets` is set to auto"
+                    "At least one of `val_data_uri` or `val_set_size` must be non null when `test_datasets` is set to auto"
                 )
 
         if cfg.test_datasets:

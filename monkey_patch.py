@@ -18,10 +18,8 @@ def patched_validate_config(cfg, capabilities: Optional[dict] = None):
     from axolotl.utils.dict import DictDefault
 
     class TruefoundryAxolotlInputConfig(AxolotlInputConfig):
-        model_config = ConfigDict(extra="allow")
-
         train_data_uri: Optional[str]
-        eval_data_uri: Optional[str] = None
+        val_data_uri: Optional[str] = None
         val_set_size: float = 0.1
         mlfoundry_enable_reporting: bool = False
         mlfoundry_ml_repo: Optional[str] = None

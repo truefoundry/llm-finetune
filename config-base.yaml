@@ -7,8 +7,8 @@ revision_of_model:
 sequence_len: 2048
 val_set_size: 0.1
 ## Added by TrueFoundry, not native to Axolotl
-train_data_uri:
-eval_data_uri: null
+train_data_uri: null
+val_data_uri: null
 mlfoundry_enable_reporting: False
 mlfoundry_ml_repo: null
 
@@ -70,6 +70,7 @@ lora_alpha: 64
 lora_dropout: 0.05
 lora_on_cpu: False
 lora_r: 32
+lora_target_modules: null
 lora_target_linear: True
 lr_scheduler: cosine
 max_grad_norm: 1.0
@@ -96,3 +97,5 @@ weight_decay: 0.01
 cleanup_output_dir_on_start: False
 logging_dir: ./tensorboard_logs
 mlfoundry_log_checkpoints: True
+use_mflow: False
+use_wandb: False
