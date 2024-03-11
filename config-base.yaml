@@ -3,12 +3,12 @@ adapter: qlora
 base_model: TinyLlama/TinyLlama-1.1B-Chat-v1.0
 debug: False
 micro_batch_size: 1
-model_revision:
+revision_of_model:
 sequence_len: 2048
+val_set_size: 0.1
 ## Added by TrueFoundry, not native to Axolotl
 train_data_uri:
 eval_data_uri: null
-val_set_size: 0.1
 mlfoundry_enable_reporting: False
 mlfoundry_ml_repo: null
 
@@ -48,12 +48,12 @@ base_model_ignore_patterns:
   - '*.ot'
   - '*.tflite'
   - '*.msgpack'
-chat_template: chatml
+chat_template: null
 dataset_prepared_path: ./outputs/data/last_run_prepared
 ddp_timeout: 21600
 deepspeed: ./deepspeed_configs/3_ds_z2_config.json
 default_system_message: You are a helpful assistant. Please give a long and detailed answer.
-early_stopping_patience: 5
+early_stopping_patience: 10
 eval_sample_packing: False
 eval_steps: 0.1
 eval_strategy: steps
@@ -62,7 +62,7 @@ flash_attn_cross_entropy: True
 flash_attn_rms_norm: True
 gradient_accumulation_steps: 4
 gradient_checkpointing: True
-learning_rate: 0.00003
+learning_rate: 0.00001
 load_best_model_at_end: True
 load_in_8bit: False
 logging_steps: 5
@@ -73,7 +73,7 @@ lora_r: 32
 lora_target_linear: True
 lr_scheduler: cosine
 max_grad_norm: 1.0
-model_type: AutoModelForCausalLM
+type_of_model: AutoModelForCausalLM
 num_epochs: 10
 optimizer: adamw_torch_fused
 output_dir: ./outputs
@@ -90,8 +90,6 @@ strict: False
 tokenizer_type: AutoTokenizer
 train_on_inputs: False
 trust_remote_code: True
-use_mlflow: False
-use_wandb: False
 warmup_ratio: 0.1
 weight_decay: 0.01
 ## Added by TrueFoundry, not native to Axolotl

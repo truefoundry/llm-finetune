@@ -1,3 +1,7 @@
+from monkey_patch import monkey_patch_axolotl_internals
+
+monkey_patch_axolotl_internals()
+
 import logging
 import os
 import shutil
@@ -8,39 +12,26 @@ import fire
 import yaml
 from axolotl.cli.merge_lora import do_cli as axolotl_merge_lora_cli
 from axolotl.cli.train import do_cli as axolotl_train_cli
-from axolotl.core.trainer_builder import AxolotlTrainer
-from axolotl.utils.callbacks import GPUStatsCallback
 from axolotl.utils.dict import DictDefault
 from axolotl.utils.distributed import barrier, is_main_process, zero_first
-from transformers.integrations.integration_utils import TensorBoardCallback
 from transformers.utils import is_torch_bf16_gpu_available, is_torch_tf32_available
 
 from checkpoint_utils import cleanup_checkpoints, get_last_checkpoint_for_resume_if_any
 from data_utils import find_all_jsonl_files
 from mlfoundry_utils import (
-    MLFoundryCallback,
     download_mlfoundry_artifact,
     get_or_create_run,
     is_mlfoundry_artifact,
     log_model_to_mlfoundry,
     sanitize_name,
 )
-from utils import (
-    ExtraMetricsCallback,
-    maybe_set_custom_tempdir,
-    maybe_set_torch_max_memory,
-    try_cleanup_gpus,
-)
+from utils import maybe_set_custom_tempdir, maybe_set_torch_max_memory, try_cleanup_gpus
 
 logger = logging.getLogger("axolotl")
 
 # TODO:
 # Save axolotl config when we create the callback
-# Implement checkpoints fetching to resume
-
-# Zero 3 loading fixes
 # Support chat format data
-# Support HF Hub Datasets
 # Check if model fits in given gpus with TP to avoid and future crashes
 
 # CURRENT LIMITATIONS
@@ -145,7 +136,6 @@ def make_axolotl_config(config_base, kwargs, timestamp=None):
         os.makedirs(cfg.output_dir, exist_ok=True)
 
         run = None
-
         if cfg.mlfoundry_enable_reporting is True:
             if TFY_INTERNAL_JOB_RUN_NAME:
                 fallback_run_name = f"finetune-{sanitize_name(TFY_INTERNAL_JOB_RUN_NAME)}"
@@ -165,7 +155,7 @@ def make_axolotl_config(config_base, kwargs, timestamp=None):
                     mlfoundry_checkpoint_artifact_name = f"ckpt-{sanitize_name(TFY_INTERNAL_JOB_RUN_NAME)}"
                 else:
                     mlfoundry_checkpoint_artifact_name = f"ckpt-{run.run_name}"
-                set_cfg_option_if_auto(cfg, "mlfoundry_log_checkpoints", mlfoundry_checkpoint_artifact_name)
+                set_cfg_option_if_auto(cfg, "mlfoundry_checkpoint_artifact_name", mlfoundry_checkpoint_artifact_name)
             else:
                 cfg.mlfoundry_log_checkpoints = False
                 cfg.mlfoundry_checkpoint_artifact_name = None
@@ -213,11 +203,6 @@ def make_axolotl_config(config_base, kwargs, timestamp=None):
         if cfg.test_datasets:
             set_cfg_option_if_auto(cfg, "val_set_size", 0, force=True)
 
-            # TODO: Axolotl has a bug where it disables load_best_model_at_end when using explicit test datasets
-            # https://github.com/OpenAccess-AI-Collective/axolotl/issues/1286
-            # Remove this when resolved upstream
-            set_cfg_option_if_auto(cfg, "early_stopping_patience", None, force=True)
-
         # TODO: Upload processed data to resume from
         set_cfg_option_if_auto(cfg, "resume_from_checkpoint", None)
 
@@ -232,88 +217,10 @@ def make_axolotl_config(config_base, kwargs, timestamp=None):
         yaml.add_representer(
             DictDefault, lambda dumper, data: dumper.represent_mapping("tag:yaml.org,2002:map", data.items())
         )
+        print(f"Saving axolotl config to {axolotl_config}")
         with open(axolotl_config, "w") as f:
             yaml.dump(cfg, f)
     return axolotl_config
-
-
-def patched_pretrain_hooks(cfg, trainer: AxolotlTrainer):
-    # Bad hack because axolotl is not flexible at the moment
-    if is_main_process():
-        logger.info(f"Config: {cfg}")
-
-    if is_main_process():
-        mlfoundry_cb = None
-        if cfg.mlfoundry_enable_reporting is True:
-            run = get_or_create_run(
-                ml_repo=cfg.mlfoundry_ml_repo,
-                run_name=cfg.mlfoundry_run_name,
-                auto_end=False,
-                create_ml_repo=False,
-            )
-            mlfoundry_cb = MLFoundryCallback(
-                run=run,
-                log_checkpoints=cfg.mlfoundry_log_checkpoints,
-                checkpoint_artifact_name=cfg.mlfoundry_checkpoint_artifact_name,
-            )
-        extra_metrics_cb = ExtraMetricsCallback()
-        tensorboard_cb_idx = None
-        for i, cb in enumerate(trainer.callback_handler.callbacks):
-            if isinstance(cb, TensorBoardCallback):
-                tensorboard_cb_idx = i
-                break
-
-        ax_gpu_stats_cb_idx = None
-        for i, cb in enumerate(trainer.callback_handler.callbacks):
-            if isinstance(cb, GPUStatsCallback):
-                ax_gpu_stats_cb_idx = i
-                break
-
-        if tensorboard_cb_idx:
-            # [..., TB_CB, ...]
-            new_callbacks = [
-                extra_metrics_cb,
-                trainer.callback_handler.callbacks[tensorboard_cb_idx],
-            ]
-            if mlfoundry_cb:
-                new_callbacks.append(mlfoundry_cb)
-            trainer.callback_handler.callbacks[tensorboard_cb_idx : tensorboard_cb_idx + 1] = new_callbacks
-            # [..., EM_CB, TB_CB, MLF_CB?, ...]
-        elif ax_gpu_stats_cb_idx:
-            # [..., AGS_CB, ...]
-            new_callbacks = [
-                extra_metrics_cb,
-            ]
-            if mlfoundry_cb:
-                new_callbacks.append(mlfoundry_cb)
-            trainer.callback_handler.callbacks[ax_gpu_stats_cb_idx:ax_gpu_stats_cb_idx] = new_callbacks
-            # [..., EM_CB, MLF_CB?, AGS_CB, ...]
-        else:
-            logger.warning("Mlfoundry callback injection failed!")
-
-
-def patched_post_train_hooks(cfg, trainer: AxolotlTrainer):
-    if trainer.args.deepspeed and hasattr(trainer, "deepspeed") and hasattr(trainer.deepspeed, "destroy"):
-        trainer.deepspeed.destroy()
-    trainer.accelerator.free_memory()
-
-
-def patch_train_hooks():
-    import axolotl.train
-
-    if hasattr(axolotl.train, "pretrain_hooks"):
-        axolotl.train.pretrain_hooks = patched_pretrain_hooks
-    else:
-        raise ValueError(
-            "Did not find `pretrain_hooks` on `axolotl.train`. " "This is required to patch and add callbacks"
-        )
-
-    if hasattr(axolotl.train, "post_train_hooks"):
-        axolotl.train.post_train_hooks = patched_post_train_hooks
-    else:
-        raise ValueError(
-            "Did not find `post_train_hooks` on `axolotl.train`. " "This is required for training to end correctly"
-        )
 
 
 def train_with_truefoundry(config_base: Path = Path("examples/"), **kwargs):
@@ -327,7 +234,6 @@ def train_with_truefoundry(config_base: Path = Path("examples/"), **kwargs):
             kwargs=kwargs,
             timestamp=timestamp,
         )
-    patch_train_hooks()
     barrier()
     axolotl_train_cli(config=axolotl_config)
     barrier()
@@ -341,38 +247,29 @@ def train_with_truefoundry(config_base: Path = Path("examples/"), **kwargs):
         if cfg.adapter in {"lora", "qlora"}:
             axolotl_merge_lora_cli(config=axolotl_config)
             model_dir = os.path.join(model_dir, "merged")
-
-        *_, model_name = cfg.base_model.rsplit("/", 1)
-        model_name = "-".join(["finetuned", model_name, timestamp])
-        model_name = sanitize_name(model_name)
-        run = get_or_create_run(
-            ml_repo=cfg.mlfoundry_ml_repo,
-            run_name=cfg.mlfoundry_run_name,
-            auto_end=False,
-            create_ml_repo=False,
-        )
-        log_model_to_mlfoundry(
-            run=run,
-            model_name=model_name,
-            model_dir=model_dir,
-            hf_hub_model_id=cfg.base_model,
-            metadata={},  # TODO
-        )
-        run.end()
+            logger.info(f"Merged model has been saved to {model_dir}")
+        if cfg.mlfoundry_enable_reporting is True:
+            *_, model_name = cfg.base_model.rsplit("/", 1)
+            model_name = "-".join(["finetuned", model_name, timestamp])
+            model_name = sanitize_name(model_name)
+            run = get_or_create_run(
+                ml_repo=cfg.mlfoundry_ml_repo,
+                run_name=cfg.mlfoundry_run_name,
+                auto_end=False,
+                create_ml_repo=False,
+            )
+            log_model_to_mlfoundry(
+                run=run,
+                model_name=model_name,
+                model_dir=model_dir,
+                hf_hub_model_id=cfg.base_model,
+                metadata={},  # TODO: Add metrics if we can
+            )
+            run.end()
 
 
 if __name__ == "__main__":
     fire.Fire(train_with_truefoundry)
-
-
-# @contextlib.contextmanager
-# def deepspeed_zero3_disabled(training_arguments: HFTrainingArguments):
-#     if training_arguments.deepspeed and is_deepspeed_zero3_enabled():
-#         unset_hf_deepspeed_config()
-#         yield
-#         set_hf_deepspeed_config(training_arguments.hf_deepspeed_config)
-#     else:
-#         yield
 
 
 # def check_if_model_will_fit_only_with_gpus(

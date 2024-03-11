@@ -9,7 +9,7 @@ from typing import Optional
 
 import pynvml
 import torch
-from pydantic import BaseModel
+from pydantic.v1 import BaseModel
 from transformers import TrainerCallback
 
 logger = logging.getLogger("axolotl")
