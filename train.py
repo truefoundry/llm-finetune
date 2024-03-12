@@ -17,14 +17,8 @@ from axolotl.utils.distributed import barrier, is_main_process, zero_first
 from transformers.utils import is_torch_bf16_gpu_available, is_torch_tf32_available
 
 from checkpoint_utils import cleanup_checkpoints, get_last_checkpoint_for_resume_if_any
-from data_utils import find_all_jsonl_files
-from mlfoundry_utils import (
-    download_mlfoundry_artifact,
-    get_or_create_run,
-    is_mlfoundry_artifact,
-    log_model_to_mlfoundry,
-    sanitize_name,
-)
+from data_utils import dataset_uri_to_axolotl_datasources
+from mlfoundry_utils import get_or_create_run, log_model_to_mlfoundry, sanitize_name
 from utils import maybe_set_custom_tempdir, maybe_set_torch_max_memory, try_cleanup_gpus
 
 logger = logging.getLogger("axolotl")
@@ -35,7 +29,6 @@ logger = logging.getLogger("axolotl")
 
 # CURRENT LIMITATIONS
 # Axolotl sets report_to to None instead of "none"
-# There should be a data_seed
 # There should be an option to add only missing special tokens
 # Cannot control truncation vs dropping when data exceeds sequence length
 # Have to hack axolotl module globals to hook our own code
@@ -54,50 +47,6 @@ def set_cfg_option_if_auto(cfg, key, value, force=False):
     if cfg[key] in ("auto", None) or force:
         logger.info(f"`{key}` is being automatically set to `{value}`")
         cfg[key] = value
-
-
-def _make_dataset_file_source(path, split="train"):
-    return {
-        "path": path,
-        "ds_type": "json",
-        "type": {
-            "system_prompt": "",
-            "field_system": "system",
-            "field_instruction": "prompt",
-            "field_output": "completion",
-            "format": "{instruction} {input} ",
-            "no_input_format": "{instruction}",
-            "system_format": "{system}",
-        },
-        "split": split,
-    }
-
-
-def dataset_uri_to_axolotl_datasources(uri, download_dir):
-    # TODO: Add support for HF datasets
-    if uri.startswith("https://"):
-        return [_make_dataset_file_source(path=uri)]
-    elif is_mlfoundry_artifact(uri):
-        datasources = []
-        logger.info("Downloading artifact from mlfoundry")
-        artifact_download_dir = os.path.join(download_dir, sanitize_name(uri))
-        download_path = download_mlfoundry_artifact(
-            artifact_version_fqn=uri, download_dir=artifact_download_dir, overwrite=True
-        )
-        for filepath in find_all_jsonl_files(download_path):
-            logger.info("Adding jsonl file {filepath}")
-            datasources.append(_make_dataset_file_source(path=filepath))
-        return datasources
-    elif os.path.exists(uri):
-        datasources = []
-        if os.path.isdir(uri):
-            for filepath in find_all_jsonl_files(uri):
-                datasources.append(_make_dataset_file_source(path=filepath))
-        else:
-            datasources = [_make_dataset_file_source(path=uri)]
-        return datasources
-    else:
-        raise ValueError("Unsupported data uri or path does not exist: {uri}")
 
 
 def load_config_file(path):
@@ -121,16 +70,18 @@ def make_axolotl_config(config_base, kwargs, timestamp=None):
     if not cfg.output_dir:
         raise ValueError("`output_dir` must be set in config base")
 
+    if is_main_process():
+        if cfg.cleanup_output_dir_on_start is True:
+            logger.warning(f"--cleanup_output_dir_on_start was to set to True, wiping {cfg.output_dir}")
+            if os.path.exists(cfg.output_dir):
+                shutil.rmtree(cfg.output_dir)
+
     data_dir = os.path.join(os.path.abspath(cfg.output_dir), "data")
     set_cfg_option_if_auto(cfg, "data_dir", data_dir)
     cfg.output_dir = os.path.join(os.path.abspath(cfg.output_dir), "model")
     axolotl_config = os.path.join(cfg.output_dir, "axolotl_config.yaml")
 
     if is_main_process():
-        if cfg.cleanup_output_dir_on_start is True:
-            logger.warning(f"--cleanup_output_dir_on_start was to set to True, wiping {cfg.output_dir}")
-            shutil.rmtree(cfg.output_dir)
-
         os.makedirs(cfg.data_dir, exist_ok=True)
         os.makedirs(cfg.output_dir, exist_ok=True)
 
@@ -188,10 +139,18 @@ def make_axolotl_config(config_base, kwargs, timestamp=None):
         if cfg.datasets == "auto":
             if not cfg.train_data_uri:
                 raise ValueError("`train_data_uri` cannot be null when set to `datasets` is set to auto")
-            cfg.datasets = dataset_uri_to_axolotl_datasources(uri=cfg.train_data_uri, download_dir=cfg.data_dir)
+            cfg.datasets = dataset_uri_to_axolotl_datasources(
+                uri=cfg.train_data_uri,
+                download_dir=cfg.data_dir,
+                dataset_type=cfg.dataset_type,
+            )
         if cfg.test_datasets == "auto":
             if cfg.val_data_uri and str(cfg.val_data_uri).lower() != "na":
-                cfg.test_datasets = dataset_uri_to_axolotl_datasources(uri=cfg.val_data_uri, download_dir=cfg.data_dir)
+                cfg.test_datasets = dataset_uri_to_axolotl_datasources(
+                    uri=cfg.val_data_uri,
+                    download_dir=cfg.data_dir,
+                    dataset_type=cfg.dataset_type,
+                )
             elif cfg.val_set_size:
                 set_cfg_option_if_auto(cfg, "test_datasets", None, force=True)
             else:

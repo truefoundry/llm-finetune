@@ -1,9 +1,11 @@
 import logging
+import sys
 from typing import Optional
 
 from pydantic import ConfigDict
 from transformers.integrations.integration_utils import TensorBoardCallback
 
+from data_utils import DatasetType
 from mlfoundry_utils import MLFoundryCallback, get_or_create_run
 from utils import ExtraMetricsCallback
 
@@ -21,6 +23,7 @@ def patched_validate_config(cfg, capabilities: Optional[dict] = None):
         train_data_uri: Optional[str]
         val_data_uri: Optional[str] = None
         val_set_size: float = 0.1
+        dataset_type: DatasetType = DatasetType.completion
         mlfoundry_enable_reporting: bool = False
         mlfoundry_ml_repo: Optional[str] = None
         mlfoundry_run_name: Optional[str] = None
@@ -41,6 +44,12 @@ def patched_validate_config(cfg, capabilities: Optional[dict] = None):
             )
         )
     return DictDefault(dict(TruefoundryAxolotlInputConfig(**cfg.to_dict()).model_dump(exclude_unset=True)))
+
+
+def add_custom_prompt_strategies():
+    import custom_prompt_strategies
+
+    sys.modules["axolotl.prompt_strategies.custom_prompt_strategies"] = custom_prompt_strategies
 
 
 def patched_pretrain_hooks(cfg, trainer):
@@ -121,6 +130,9 @@ def monkey_patch_axolotl_internals():
         axolotl.utils.config.validate_config = patched_validate_config
     else:
         raise ValueError("Did not find `validate_config` on `axolotl.utils.config`. " "This is required")
+
+    logger.info("Adding custom data prompt strategies...")
+    add_custom_prompt_strategies()
 
     if hasattr(axolotl.train, "pretrain_hooks"):
         logger.info("Patching pretrain_hooks...")

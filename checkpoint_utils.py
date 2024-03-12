@@ -13,7 +13,7 @@ from mlfoundry_utils import (
     get_latest_checkpoint_artifact_version_or_none,
 )
 
-logger = logging.getLogger("truefoundry-finetune")
+logger = logging.getLogger("axolotl")
 
 
 def download_last_checkpoint_if_present(ml_repo: str, checkpoint_artifact_name: str, local_dir: str) -> Optional[str]:
