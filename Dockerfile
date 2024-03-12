@@ -4,14 +4,15 @@ USER root
 COPY requirements.txt /tmp/
 RUN pip install -U pip wheel setuptools && \
     pip uninstall -y mlflow axolotl && \
-    pip install --no-cache-dir -U -r /tmp/requirements.txt && \
-    mkdir -p /packages && \
+    pip install --no-cache-dir -U -r /tmp/requirements.txt
+RUN mkdir -p /packages && \
     cd /packages && \
     git clone https://github.com/OpenAccess-AI-Collective/axolotl && \
     cd axolotl/ && \
-    git checkout 43265208299242e3bc32690e22efadef79365c9d && \
-    pip install -U --no-build-isolation -e .[deepspeed,flash-attn,mamba-ssm,fused-dense-lib] && \
+    git checkout 43265208299242e3bc32690e22efadef79365c9d
+RUN MAX_JOBS=1 pip install -U --no-build-isolation -e .[deepspeed,flash-attn,mamba-ssm,fused-dense-lib] && \
     pip uninstall -y mlflow tfy-mlflow-client && \
-    pip install --no-cache-dir -U -r /tmp/requirements.txt
+    pip install --no-cache-dir -U -r /tmp/requirements.txt && \
+    rm -rf /root/.cache/pip
 WORKDIR /app
 COPY . /app
