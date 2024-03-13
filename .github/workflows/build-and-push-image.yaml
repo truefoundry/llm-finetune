@@ -93,7 +93,7 @@ jobs:
           cache-to: mode=max,image-manifest=true,type=registry,ref=${{ env.REPOSITORY_URI }}:buildcache
           build-args: |
             MAX_JOBS="1"
-            NVCC_APPEND_FLAGS="--verbose --threads 1"
+            NVCC_APPEND_FLAGS="--threads 1"
 
   # build_notebook_image:
   #   name: Build Notebook Image

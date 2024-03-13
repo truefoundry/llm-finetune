@@ -13,7 +13,7 @@ RUN mkdir -p /packages && \
     cd axolotl/ && \
     git checkout 43265208299242e3bc32690e22efadef79365c9d
 RUN cd /packages/axolotl/ && \
-    MAX_JOBS=${MAX_JOBS} NVCC_APPEND_FLAGS=${NVCC_APPEND_FLAGS} pip install -vvvvvvv -U --no-build-isolation -e .[deepspeed,flash-attn,mamba-ssm,fused-dense-lib] && \
+    MAX_JOBS=${MAX_JOBS} NVCC_APPEND_FLAGS=${NVCC_APPEND_FLAGS} pip install -U --no-build-isolation -e .[deepspeed,flash-attn,mamba-ssm,fused-dense-lib] && \
     pip uninstall -y mlflow tfy-mlflow-client && \
     pip install --no-cache-dir -U -r /tmp/requirements.txt && \
     rm -rf /root/.cache/pip
