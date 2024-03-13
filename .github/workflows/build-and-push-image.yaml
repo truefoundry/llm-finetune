@@ -89,6 +89,9 @@ jobs:
           tags: ${{ env.IMAGE_TAG_1 }},${{ env.IMAGE_TAG_2 }},${{ env.IMAGE_TAG_3 }}
           cache-from: type=registry,ref=${{ env.REPOSITORY_URI }}:buildcache
           cache-to: mode=max,image-manifest=true,type=registry,ref=${{ env.REPOSITORY_URI }}:buildcache
+          build-args: |
+            MAX_JOBS="1"
+            NVCC_APPEND_FLAGS="--threads 1"
 
   # build_notebook_image:
   #   name: Build Notebook Image
