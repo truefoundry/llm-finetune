@@ -20,7 +20,7 @@ env:
 jobs:
   build_image:
     name: Build Image
-    runs-on: ubuntu-20.04
+    runs-on: ubuntu-latest
     steps:
       - name: Free Disk Space (Ubuntu)
         uses: jlumbroso/free-disk-space@main
