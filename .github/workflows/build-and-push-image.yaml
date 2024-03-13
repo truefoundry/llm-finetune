@@ -43,7 +43,7 @@ jobs:
 
           REF_NAME=${{ github.ref_name }}
           TAG_PREFIX=${{ env.TAG_PREFIX }}
-          VERSION_TAG=$(echo $REF_NAME | awk -F$TAG_PREFIX '{print $2}')
+          VERSION_TAG=$(echo $REF_NAME | cut -d $TAG_PREFIX -f 2-)
           echo "Setting VERSION_TAG equal to $VERSION_TAG"
           echo "VERSION_TAG=$VERSION_TAG" >> $GITHUB_ENV
 
@@ -89,9 +89,7 @@ jobs:
           tags: ${{ env.IMAGE_TAG_1 }},${{ env.IMAGE_TAG_2 }},${{ env.IMAGE_TAG_3 }}
           cache-from: type=registry,ref=${{ env.REPOSITORY_URI }}:buildcache
           cache-to: mode=max,image-manifest=true,type=registry,ref=${{ env.REPOSITORY_URI }}:buildcache
-          build-args: |
-            MAX_JOBS="1"
-            NVCC_APPEND_FLAGS="--threads 1"
+
 
   # build_notebook_image:
   #   name: Build Notebook Image
@@ -118,7 +116,7 @@ jobs:
 
   #         REF_NAME=${{ github.ref_name }}
   #         TAG_PREFIX=${{ env.TAG_PREFIX }}
-  #         VERSION_TAG=$(echo $REF_NAME | awk -F$TAG_PREFIX '{print $2}')-jupyter
+  #         VERSION_TAG=$(echo $REF_NAME | cut -d $TAG_PREFIX -f 2-)-jupyter
   #         echo "Setting VERSION_TAG equal to $VERSION_TAG"
   #         echo "VERSION_TAG=$VERSION_TAG" >> $GITHUB_ENV
 
