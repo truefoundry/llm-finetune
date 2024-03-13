@@ -1,7 +1,5 @@
 # https://hub.docker.com/layers/winglian/axolotl/main-py3.11-cu121-2.1.2/images/sha256-ace38a300833e0e5fb22af7c8692306699ed3614a1f33b37e8bedb1f6ef0ef2e?context=explore
 FROM --platform=linux/amd64 winglian/axolotl@sha256:ace38a300833e0e5fb22af7c8692306699ed3614a1f33b37e8bedb1f6ef0ef2e
-ARG MAX_JOBS
-ARG NVCC_APPEND_FLAGS
 USER root
 COPY requirements.txt /tmp/
 RUN pip install -U pip wheel setuptools && \
