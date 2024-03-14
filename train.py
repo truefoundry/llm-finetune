@@ -18,14 +18,15 @@ from transformers.utils import is_torch_bf16_gpu_available, is_torch_tf32_availa
 
 from checkpoint_utils import cleanup_checkpoints, get_last_checkpoint_for_resume_if_any
 from data_utils import dataset_uri_to_axolotl_datasources
-from mlfoundry_utils import get_or_create_run, log_model_to_mlfoundry, sanitize_name
+from mlfoundry_utils import (
+    get_or_create_run,
+    log_model_to_mlfoundry,
+    maybe_log_params_to_mlfoundry,
+    sanitize_name,
+)
 from utils import maybe_set_custom_tempdir, maybe_set_torch_max_memory, try_cleanup_gpus
 
 logger = logging.getLogger("axolotl")
-
-# TODO:
-# Save axolotl config when we create the callback
-# Support chat format data
 
 # CURRENT LIMITATIONS
 # Axolotl sets report_to to None instead of "none"
@@ -178,6 +179,9 @@ def make_axolotl_config(config_base, kwargs, timestamp=None):
         print(f"Saving axolotl config to {axolotl_config}")
         with open(axolotl_config, "w") as f:
             yaml.dump(cfg, f)
+
+        if run:
+            maybe_log_params_to_mlfoundry(run, cfg)
     return axolotl_config
 
 
@@ -221,7 +225,8 @@ def train_with_truefoundry(config_base: Path = Path("examples/"), **kwargs):
                 model_name=model_name,
                 model_dir=model_dir,
                 hf_hub_model_id=cfg.base_model,
-                metadata={},  # TODO: Add metrics if we can
+                metadata={},
+                # TODO (chiragjn): Need to add step here to link with metrics!
             )
             run.end()
 

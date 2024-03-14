@@ -1,3 +1,4 @@
+import copy
 import logging
 import math
 import os
@@ -204,3 +205,13 @@ def get_or_create_run(ml_repo: str, run_name: str, auto_end: bool = False, creat
             raise
         run = client.create_run(ml_repo=ml_repo, run_name=run_name, auto_end=auto_end)
     return run
+
+
+def maybe_log_params_to_mlfoundry(run: mlfoundry.MlFoundryRun, params: Dict[str, Any]):
+    if not params:
+        return
+    if run.get_params():
+        logger.warning("Skipping logging params because they already exist")
+    else:
+        params = copy.deepcopy(params)
+    run.log_params(params, flatten_params=False)
