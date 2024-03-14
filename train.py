@@ -209,6 +209,22 @@ def train_with_truefoundry(config_base: Path = Path("examples/"), **kwargs):
         if cfg.adapter in {"lora", "qlora"}:
             axolotl_merge_lora_cli(config=axolotl_config)
             model_dir = os.path.join(model_dir, "merged")
+            model_parent_dir = os.path.dirname(model_dir)
+            # Copy tensorboard logs
+            tensorboard_logs_dir = os.path.join(model_parent_dir, "runs")
+            if os.path.exists(tensorboard_logs_dir):
+                shutil.copytree(
+                    tensorboard_logs_dir,
+                    os.path.join(model_dir, "runs"),
+                    dirs_exist_ok=True,
+                )
+            # Copy axolotl config
+            if os.path.exists(axolotl_config):
+                shutil.copy2(axolotl_config, os.path.join(model_dir, "axolotl_config.yaml"))
+            # Copy README.md
+            readme_path = os.path.join(model_parent_dir, "README.md")
+            if os.path.exists(readme_path):
+                shutil.copy2(readme_path, os.path.join(model_dir, "README.md"))
             logger.info(f"Merged model has been saved to {model_dir}")
         if cfg.mlfoundry_enable_reporting is True:
             *_, model_name = cfg.base_model.rsplit("/", 1)
