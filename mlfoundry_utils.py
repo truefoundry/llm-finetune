@@ -184,12 +184,12 @@ def sanitize_name(value):
     return re.sub(rf"[{re.escape(string.punctuation)}]+", "-", value.encode("ascii", "ignore").decode("utf-8"))
 
 
-def generate_run_name(model_id):
+def generate_run_name(model_id, seed: Optional[int] = None):
     *_, model_name = model_id.split("/", 1)
     sanitized_model_name = sanitize_name(model_name)
     alphabet = string.ascii_lowercase + string.digits
-    random.choices(alphabet, k=8)
-    random_id = "".join(random.choices(alphabet, k=6))
+    rng = random.Random(seed) if seed is not None else random
+    random_id = "".join(rng.choices(alphabet, k=6))
     run_name = f"ft-{sanitized_model_name}-{random_id}"
     return run_name
 
