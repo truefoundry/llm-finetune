@@ -1,5 +1,5 @@
-# https://hub.docker.com/layers/winglian/axolotl/main-py3.11-cu121-2.1.2/images/sha256-ace38a300833e0e5fb22af7c8692306699ed3614a1f33b37e8bedb1f6ef0ef2e?context=explore
-FROM --platform=linux/amd64 winglian/axolotl@sha256:ace38a300833e0e5fb22af7c8692306699ed3614a1f33b37e8bedb1f6ef0ef2e
+# https://hub.docker.com/layers/winglian/axolotl/main-py3.11-cu121-2.1.2/images/sha256-a794e3d8562d3a9a40296726671480c45951cd6e0ad6e8f359e47e75ccbe22ab?context=explore
+FROM --platform=linux/amd64 winglian/axolotl@sha256:dc46cae262116297d23f2b445deda3d4b9759b7da5b318315665036a0e2c7140
 USER root
 COPY requirements.txt /tmp/
 RUN pip install -U pip wheel setuptools && \
@@ -9,7 +9,7 @@ RUN mkdir -p /packages && \
     cd /packages && \
     git clone https://github.com/OpenAccess-AI-Collective/axolotl && \
     cd axolotl/ && \
-    git checkout 43265208299242e3bc32690e22efadef79365c9d
+    git checkout 7803f0934f71c503589d4097598f13129105700c
 RUN cd /packages/axolotl/ && \
     MAX_JOBS=1 NVCC_APPEND_FLAGS="--verbose --threads 1" pip install -v -U --no-build-isolation -e .[deepspeed,flash-attn,mamba-ssm,fused-dense-lib] && \
     pip uninstall -y mlflow tfy-mlflow-client && \
