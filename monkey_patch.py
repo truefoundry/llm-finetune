@@ -122,7 +122,6 @@ def monkey_patch_axolotl_internals():
     import axolotl.train
     import axolotl.utils.config
 
-    axolotl.logging_config.DEFAULT_LOGGING_CONFIG["disable_existing_loggers"] = False
     axolotl.logging_config.configure_logging()
 
     if hasattr(axolotl.utils.config, "validate_config"):

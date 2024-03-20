@@ -214,4 +214,4 @@ def maybe_log_params_to_mlfoundry(run: mlfoundry.MlFoundryRun, params: Dict[str,
         logger.warning("Skipping logging params because they already exist")
     else:
         params = copy.deepcopy(params)
-    run.log_params(params, flatten_params=False)
+        run.log_params(params, flatten_params=False)
