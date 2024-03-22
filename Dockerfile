@@ -9,7 +9,7 @@ RUN mkdir -p /packages && \
     cd /packages && \
     git clone https://github.com/OpenAccess-AI-Collective/axolotl && \
     cd axolotl/ && \
-    git checkout 7803f0934f71c503589d4097598f13129105700c
+    git checkout 40a88e8c4a2f32b63df0fe2079f7acfe73329273
 RUN cd /packages/axolotl/ && \
     MAX_JOBS=1 NVCC_APPEND_FLAGS="--verbose --threads 1" pip install -v -U --no-build-isolation -e .[deepspeed,flash-attn,mamba-ssm,fused-dense-lib] && \
     pip uninstall -y mlflow tfy-mlflow-client && \

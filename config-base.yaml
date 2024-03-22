@@ -63,6 +63,8 @@ flash_attn_cross_entropy: True
 flash_attn_rms_norm: True
 gradient_accumulation_steps: 4
 gradient_checkpointing: True
+gradient_checkpointing_kwargs:
+  use_reentrant: True
 learning_rate: 0.00001
 load_best_model_at_end: True
 load_in_8bit: False
