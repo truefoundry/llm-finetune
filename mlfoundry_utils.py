@@ -8,11 +8,11 @@ import shutil
 import string
 from typing import Any, Dict, Optional
 
-import mlfoundry
 import numpy as np
 from huggingface_hub import scan_cache_dir
 from transformers import TrainerCallback
 from transformers.integrations import rewrite_logs
+from truefoundry import ml as mlfoundry
 
 logger = logging.getLogger("axolotl")
 

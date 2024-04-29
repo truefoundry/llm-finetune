@@ -19,12 +19,11 @@ RUN mkdir -p /packages && \
     chown -R jovyan:users /packages
 USER jovyan
 RUN cd /packages && \
-    git clone https://github.com/OpenAccess-AI-Collective/axolotl && \
+    git clone https://github.com/truefoundry/axolotl && \
     cd axolotl/ && \
-    git checkout 40a88e8c4a2f32b63df0fe2079f7acfe73329273
+    git checkout 7ac62f5fa6b3df526a7d0fed7c711faa20df12b0
 RUN cd /packages/axolotl/ && \
-    MAX_JOBS=1 NVCC_APPEND_FLAGS="--threads 1" pip install -v -U --no-build-isolation -e .[deepspeed,flash-attn,mamba-ssm,fused-dense-lib] && \
-    pip uninstall -y mlflow tfy-mlflow-client && \
+    MAX_JOBS=1 NVCC_APPEND_FLAGS="--threads 1" pip install -U --no-build-isolation -e .[flash-attn,mamba-ssm,fused-dense-lib] && \
     pip install --no-cache-dir -U -r /tmp/llm-finetune/notebook-requirements.txt
 COPY --chown=jovyan:users . /tmp_home/jovyan/llm-finetune/
 ENV JUPYTER_APP_LAUNCHER_PATH=/home/jovyan/llm-finetune/.jp_app_launcher/

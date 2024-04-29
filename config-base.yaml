@@ -54,6 +54,7 @@ dataset_prepared_path: ./outputs/data/last_run_prepared
 ddp_timeout: 21600
 deepspeed: ./deepspeed_configs/3_ds_z2_config.json
 default_system_message: You are a helpful assistant. Please give a long and detailed answer.
+device_map: null
 early_stopping_patience: 10
 eval_sample_packing: False
 eval_steps: 0.1
@@ -62,7 +63,7 @@ flash_attention: True
 flash_attn_cross_entropy: True
 flash_attn_rms_norm: True
 gradient_accumulation_steps: 4
-gradient_checkpointing: True
+gradient_checkpointing: unsloth
 gradient_checkpointing_kwargs:
   use_reentrant: True
 learning_rate: 0.00001
@@ -73,15 +74,16 @@ lora_alpha: 64
 lora_dropout: 0.05
 lora_on_cpu: False
 lora_r: 32
-lora_target_modules: null
 lora_target_linear: True
+lora_target_modules: null
+low_cpu_mem_usage: True
 lr_scheduler: cosine
 max_grad_norm: 1.0
-type_of_model: AutoModelForCausalLM
 num_epochs: 10
 optimizer: adamw_torch_fused
 output_dir: ./outputs
 pad_to_sequence_len: True
+remove_unused_columns: True
 report_to: tensorboard
 resize_token_embeddings_to_32x: False
 sample_packing: True
@@ -94,6 +96,7 @@ strict: False
 tokenizer_type: AutoTokenizer
 train_on_inputs: False
 trust_remote_code: True
+type_of_model: AutoModelForCausalLM
 warmup_ratio: 0.1
 weight_decay: 0.01
 ## Added by TrueFoundry, not native to Axolotl

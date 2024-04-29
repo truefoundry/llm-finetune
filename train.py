@@ -14,6 +14,7 @@ from axolotl.cli.merge_lora import do_cli as axolotl_merge_lora_cli
 from axolotl.cli.train import do_cli as axolotl_train_cli
 from axolotl.utils.dict import DictDefault
 from axolotl.utils.distributed import barrier, is_main_process, zero_first
+from axolotl.utils.models import load_tokenizer
 from transformers.utils import is_torch_bf16_gpu_available, is_torch_tf32_available
 
 from checkpoint_utils import cleanup_checkpoints, get_last_checkpoint_for_resume_if_any
@@ -83,6 +84,8 @@ def make_axolotl_config(config_base, kwargs, timestamp=None):
     axolotl_config = os.path.join(cfg.output_dir, "axolotl_config.yaml")
 
     if is_main_process():
+        set_cfg_option_if_auto(cfg, "tokenizer_config", cfg.base_model_config or cfg.base_model)
+
         os.makedirs(cfg.data_dir, exist_ok=True)
         os.makedirs(cfg.output_dir, exist_ok=True)
 
@@ -169,8 +172,10 @@ def make_axolotl_config(config_base, kwargs, timestamp=None):
         # Problem is axolotl tries fixing/adding some tokens by its own.
         # We don't want to override those decisions without understanding the consequences
         set_cfg_option_if_auto(cfg, "special_tokens", {})
+        tokenizer = load_tokenizer(cfg=cfg)
+        if not tokenizer.pad_token:
+            cfg["special_tokens"]["pad_token"] = tokenizer.eos_token
         set_cfg_option_if_auto(cfg, "lora_modules_to_save", [])
-
         logger.info(f"Prepared config: {cfg}")
         # This hack is needed because yaml dump refuses to tread DictDefault as dict
         yaml.add_representer(
@@ -207,7 +212,7 @@ def train_with_truefoundry(config_base: Path = Path("examples/"), **kwargs):
         model_dir = cfg.output_dir
         cleanup_checkpoints(output_dir=cfg.output_dir)
         if cfg.adapter in {"lora", "qlora"}:
-            axolotl_merge_lora_cli(config=axolotl_config)
+            axolotl_merge_lora_cli(config=axolotl_config, deepspeed=None, fsdp=None, device_map="auto")
             model_dir = os.path.join(model_dir, "merged")
             model_parent_dir = os.path.dirname(model_dir)
             # Copy tensorboard logs
