@@ -25,7 +25,12 @@ from mlfoundry_utils import (
     maybe_log_params_to_mlfoundry,
     sanitize_name,
 )
-from utils import maybe_set_custom_tempdir, maybe_set_torch_max_memory, try_cleanup_gpus
+from utils import (
+    maybe_set_custom_tempdir,
+    maybe_set_torch_max_memory,
+    temporarily_unset_accelerate_envs,
+    try_cleanup_gpus,
+)
 
 logger = logging.getLogger("axolotl")
 
@@ -212,7 +217,8 @@ def train_with_truefoundry(config_base: Path = Path("examples/"), **kwargs):
         model_dir = cfg.output_dir
         cleanup_checkpoints(output_dir=cfg.output_dir)
         if cfg.adapter in {"lora", "qlora"}:
-            axolotl_merge_lora_cli(config=axolotl_config, deepspeed=None, fsdp=None, device_map="auto")
+            with temporarily_unset_accelerate_envs():
+                axolotl_merge_lora_cli(config=axolotl_config, deepspeed=None, fsdp=None, device_map="auto")
             model_dir = os.path.join(model_dir, "merged")
             model_parent_dir = os.path.dirname(model_dir)
             # Copy tensorboard logs

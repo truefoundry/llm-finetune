@@ -1,3 +1,4 @@
+import contextlib
 import gc
 import json
 import logging
@@ -100,6 +101,16 @@ def maybe_set_torch_max_memory(device: int):
             torch.cuda.set_per_process_memory_fraction(frac, device=device)
     else:
         torch.cuda.set_per_process_memory_fraction(0.95, device=device)
+
+
+@contextlib.contextmanager
+def temporarily_unset_accelerate_envs():
+    accelerate_envs = {}
+    for key in os.environ:
+        if key.startswith("ACCELERATE_"):
+            accelerate_envs[key] = os.environ.pop(key)
+    yield
+    os.environ.update(accelerate_envs)
 
 
 # Notebook Utils
