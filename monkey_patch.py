@@ -112,9 +112,7 @@ def patched_pretrain_hooks(cfg, trainer):
 
 def patched_post_train_hooks(cfg, trainer):
     # type: (DictDefault, AxolotlTrainer) -> None
-    if trainer.args.deepspeed and hasattr(trainer, "deepspeed") and hasattr(trainer.deepspeed, "destroy"):
-        trainer.deepspeed.destroy()
-    trainer.accelerator.free_memory()
+    pass
 
 
 def monkey_patch_axolotl_internals():

@@ -11,15 +11,6 @@
     "bf16": {
       "enabled": "auto"
     },
-    "optimizer": {
-      "type": "AdamW",
-      "params": {
-        "lr": "auto",
-        "betas": "auto",
-        "eps": "auto",
-        "weight_decay": "auto"
-      }
-    },
     "activation_checkpointing": {
       "partition_activations": false,
       "cpu_checkpointing": false
