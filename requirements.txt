@@ -1,5 +1,5 @@
 --extra-index-url https://download.pytorch.org/whl/cu121
-torch==2.2.1+cu121
+torch==2.3.0+cu121
 cloud-files==4.15.2
 truefoundry[ml]==0.1.2
 snowflake-connector-python[pandas]==3.7.0
