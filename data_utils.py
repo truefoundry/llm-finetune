@@ -25,7 +25,9 @@ class DatasetType(str, enum.Enum):
     chat = "chat"
 
 
-def _make_dataset_file_source(path, split="train", dataset_type: DatasetType = DatasetType.completion):
+def _make_dataset_file_source(
+    path, split="train", dataset_type: DatasetType = DatasetType.completion, chat_template: str = "chatml"
+):
     """
     Axolotl dynamically loads prompt strategies based on the `type` key
     The modules are present at axolotl.prompt_strategies.*
@@ -49,9 +51,9 @@ def _make_dataset_file_source(path, split="train", dataset_type: DatasetType = D
                 "field_system": "system",
                 "field_instruction": "prompt",
                 "field_output": "completion",
-                "format": "{instruction} {input} ",
-                "no_input_format": "{instruction}",
-                "system_format": "{system}",
+                "format": "{instruction}\n{input}\n",
+                "no_input_format": "{instruction}\n",
+                "system_format": "{system}\n",
             },
             "split": split,
         }
@@ -59,8 +61,12 @@ def _make_dataset_file_source(path, split="train", dataset_type: DatasetType = D
         return {
             "path": path,
             "ds_type": "json",
-            "type": "custom_prompt_strategies.load_openai_sharegpt",
-            "conversation": "chatml",
+            "type": "chat_template",
+            "chat_template": chat_template,
+            "field_messages": "messages",
+            "message_field_role": "role",
+            "message_field_content": "content",
+            "roles": {"system": ["system"], "user": ["user"], "assistant": ["assistant"], "tool": ["tool"]},
             "split": split,
         }
     else:
