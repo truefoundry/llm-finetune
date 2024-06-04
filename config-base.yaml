@@ -97,6 +97,10 @@ tokenizer_type: AutoTokenizer
 train_on_inputs: False
 trust_remote_code: True
 type_of_model: AutoModelForCausalLM
+unsloth_cross_entropy_loss: True
+unsloth_lora_mlp: True
+unsloth_lora_qkv: True
+unsloth_lora_o: True
 warmup_ratio: 0.1
 weight_decay: 0.01
 ## Added by TrueFoundry, not native to Axolotl
@@ -105,3 +109,4 @@ logging_dir: ./tensorboard_logs
 mlfoundry_log_checkpoints: True
 use_mflow: False
 use_wandb: False
+use_tensorboard: True
