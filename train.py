@@ -63,6 +63,8 @@ def load_config_file(path):
 
 
 def make_axolotl_config(config_base, kwargs, timestamp=None):
+    import torch
+
     cfg = load_config_file(path=config_base)
     cfg_keys = cfg.keys()
     # TODO: Support nested overriding via kwargs: --a.b.c or --a.0.b
@@ -144,6 +146,12 @@ def make_axolotl_config(config_base, kwargs, timestamp=None):
         set_cfg_option_if_auto(cfg, "load_in_4bit", cfg.adapter == "qlora")
         set_cfg_option_if_auto(cfg, "flash_attn_fuse_mlp", cfg.adapter not in {"qlora", "lora"})
         set_cfg_option_if_auto(cfg, "flash_attn_fuse_qkv", cfg.adapter not in {"qlora", "lora"})
+
+        single_gpu = torch.cuda.device_count() == 1
+        set_cfg_option_if_auto(cfg, "unsloth_cross_entropy_loss", single_gpu)
+        set_cfg_option_if_auto(cfg, "unsloth_lora_mlp", single_gpu)
+        set_cfg_option_if_auto(cfg, "unsloth_lora_qkv", single_gpu)
+        set_cfg_option_if_auto(cfg, "unsloth_lora_o", single_gpu)
 
         if cfg.datasets == "auto":
             if not cfg.train_data_uri:

@@ -5,3 +5,4 @@ truefoundry[ml]==0.2.4
 snowflake-connector-python[pandas]==3.7.0
 pyarrow==15.0.0
 deepspeed @ git+https://github.com/truefoundry/DeepSpeed@0866580c316963ddda30ffee44de2c3e21129556
+unsloth @ git+https://github.com/unslothai/unsloth@27fa021a7bb959a53667dd4e7cdb9598c207aa0d

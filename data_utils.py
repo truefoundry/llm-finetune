@@ -66,7 +66,7 @@ def _make_dataset_file_source(
             "field_messages": "messages",
             "message_field_role": "role",
             "message_field_content": "content",
-            "roles": {"system": ["system"], "user": ["user"], "assistant": ["assistant"], "tool": ["tool"]},
+            "roles": {"system": ["system"], "user": ["user", "human"], "assistant": ["assistant"], "tool": ["tool"]},
             "split": split,
         }
     else:

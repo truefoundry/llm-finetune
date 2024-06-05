@@ -29,6 +29,10 @@ load_in_4bit: auto # type: bool
 lora_modules_to_save: auto # type: list
 resume_from_checkpoint: auto # type: bool
 special_tokens: auto  # type: dict
+unsloth_cross_entropy_loss: auto # type: bool
+unsloth_lora_mlp: auto # type: bool
+unsloth_lora_qkv: auto # type: bool
+unsloth_lora_o: auto # type: bool
 tf32: auto # type: bool
 ## Added by TrueFoundry, not native to Axolotl
 mlfoundry_run_name: auto # type: string
@@ -97,10 +101,6 @@ tokenizer_type: AutoTokenizer
 train_on_inputs: False
 trust_remote_code: True
 type_of_model: AutoModelForCausalLM
-unsloth_cross_entropy_loss: True
-unsloth_lora_mlp: True
-unsloth_lora_qkv: True
-unsloth_lora_o: True
 warmup_ratio: 0.1
 weight_decay: 0.01
 ## Added by TrueFoundry, not native to Axolotl

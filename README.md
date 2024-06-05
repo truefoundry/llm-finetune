@@ -10,6 +10,7 @@ Test QLoRA w/ Deepspeed Stage 2
 # export CUDA_LAUNCH_BLOCKING=1
 # export NCCL_DEBUG=INFO
 # export TORCH_PER_PROCESS_MEMORY_LIMIT=22000
+export PYTORCH_CUDA_ALLOC_CONF="expandable_segments:True"
 export CUDA_VISIBLE_DEVICES=0
 export DISABLE_MLFLOW_INTEGRATION=True
 
