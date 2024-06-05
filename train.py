@@ -147,11 +147,11 @@ def make_axolotl_config(config_base, kwargs, timestamp=None):
         set_cfg_option_if_auto(cfg, "flash_attn_fuse_mlp", cfg.adapter not in {"qlora", "lora"})
         set_cfg_option_if_auto(cfg, "flash_attn_fuse_qkv", cfg.adapter not in {"qlora", "lora"})
 
-        single_gpu = torch.cuda.device_count() == 1
-        set_cfg_option_if_auto(cfg, "unsloth_cross_entropy_loss", single_gpu)
-        set_cfg_option_if_auto(cfg, "unsloth_lora_mlp", single_gpu)
-        set_cfg_option_if_auto(cfg, "unsloth_lora_qkv", single_gpu)
-        set_cfg_option_if_auto(cfg, "unsloth_lora_o", single_gpu)
+        use_unsloth = False  # torch.cuda.device_count() == 1
+        set_cfg_option_if_auto(cfg, "unsloth_cross_entropy_loss", use_unsloth)
+        set_cfg_option_if_auto(cfg, "unsloth_lora_mlp", use_unsloth)
+        set_cfg_option_if_auto(cfg, "unsloth_lora_qkv", use_unsloth)
+        set_cfg_option_if_auto(cfg, "unsloth_lora_o", use_unsloth)
 
         if cfg.datasets == "auto":
             if not cfg.train_data_uri:
@@ -226,7 +226,7 @@ def train_with_truefoundry(config_base: Path = Path("examples/"), **kwargs):
         cleanup_checkpoints(output_dir=cfg.output_dir)
         if cfg.adapter in {"lora", "qlora"}:
             with temporarily_unset_accelerate_envs():
-                axolotl_merge_lora_cli(config=axolotl_config, deepspeed=None, fsdp=None, device_map="auto")
+                axolotl_merge_lora_cli(config=axolotl_config, device_map="auto")
             model_dir = os.path.join(model_dir, "merged")
             model_parent_dir = os.path.dirname(model_dir)
             # Copy tensorboard logs
