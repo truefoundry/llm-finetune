@@ -73,7 +73,9 @@ def _make_dataset_file_source(
         raise ValueError(f"Unsupported dataset type: {dataset_type}")
 
 
-def dataset_uri_to_axolotl_datasources(uri, download_dir, dataset_type: DatasetType = DatasetType.completion):
+def dataset_uri_to_axolotl_datasources(
+    uri, download_dir, dataset_type: DatasetType = DatasetType.completion, chat_template: str = "chatml"
+):
     # TODO: Add support for HF datasets
     if uri.startswith("https://"):
         return [_make_dataset_file_source(path=uri, dataset_type=dataset_type)]

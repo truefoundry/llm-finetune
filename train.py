@@ -15,6 +15,7 @@ from axolotl.cli.train import do_cli as axolotl_train_cli
 from axolotl.utils.dict import DictDefault
 from axolotl.utils.distributed import barrier, is_main_process, zero_first
 from axolotl.utils.models import load_tokenizer
+from transformers import AutoConfig
 from transformers.utils import is_torch_bf16_gpu_available, is_torch_tf32_available
 
 from checkpoint_utils import cleanup_checkpoints, get_last_checkpoint_for_resume_if_any
@@ -48,6 +49,14 @@ DEFAULT_PAD_TOKEN = "<pad>"
 DEFAULT_EOS_TOKEN = "</s>"
 DEFAULT_BOS_TOKEN = "<s>"
 DEFAULT_UNK_TOKEN = "<unk>"
+MODEL_TYPE_TO_CHAT_TEMPLATE = {
+    "llama": "llama3",
+    "gemma": "gemma",
+    "cohere": "cohere",
+    "phi3": "phi_3",
+    "phi_3": "phi_3",
+    None: "chatml",
+}
 
 
 def set_cfg_option_if_auto(cfg, key, value, force=False):
@@ -82,6 +91,8 @@ def make_axolotl_config(config_base, kwargs, timestamp=None):
             logger.warning(f"--cleanup_output_dir_on_start was to set to True, wiping {cfg.output_dir}")
             if os.path.exists(cfg.output_dir):
                 shutil.rmtree(cfg.output_dir)
+
+    model_hf_config = AutoConfig.from_pretrained(cfg.base_model, trust_remote_code=True)
 
     data_dir = os.path.join(os.path.abspath(cfg.output_dir), "data")
     set_cfg_option_if_auto(cfg, "data_dir", data_dir)
@@ -151,6 +162,9 @@ def make_axolotl_config(config_base, kwargs, timestamp=None):
         set_cfg_option_if_auto(cfg, "unsloth_lora_qkv", use_unsloth)
         set_cfg_option_if_auto(cfg, "unsloth_lora_o", use_unsloth)
 
+        model_type = getattr(model_hf_config, "model_type", None)
+        chat_template = MODEL_TYPE_TO_CHAT_TEMPLATE.get(model_type, "chatml")
+
         if cfg.datasets == "auto":
             if not cfg.train_data_uri:
                 raise ValueError("`train_data_uri` cannot be null when set to `datasets` is set to auto")
@@ -158,6 +172,7 @@ def make_axolotl_config(config_base, kwargs, timestamp=None):
                 uri=cfg.train_data_uri,
                 download_dir=cfg.data_dir,
                 dataset_type=cfg.dataset_type,
+                chat_template=chat_template,
             )
         if cfg.test_datasets == "auto":
             if cfg.val_data_uri and str(cfg.val_data_uri).lower() != "na":
@@ -165,6 +180,7 @@ def make_axolotl_config(config_base, kwargs, timestamp=None):
                     uri=cfg.val_data_uri,
                     download_dir=cfg.data_dir,
                     dataset_type=cfg.dataset_type,
+                    chat_template=chat_template,
                 )
             elif cfg.val_set_size:
                 set_cfg_option_if_auto(cfg, "test_datasets", None, force=True)
