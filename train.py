@@ -63,8 +63,6 @@ def load_config_file(path):
 
 
 def make_axolotl_config(config_base, kwargs, timestamp=None):
-    import torch
-
     cfg = load_config_file(path=config_base)
     cfg_keys = cfg.keys()
     # TODO: Support nested overriding via kwargs: --a.b.c or --a.0.b
