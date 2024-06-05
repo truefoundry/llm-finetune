@@ -55,6 +55,7 @@ MODEL_TYPE_TO_CHAT_TEMPLATE = {
     "cohere": "cohere",
     "phi3": "phi_3",
     "phi_3": "phi_3",
+    "phi": "phi_3",
     None: "chatml",
 }
 
@@ -164,6 +165,7 @@ def make_axolotl_config(config_base, kwargs, timestamp=None):
 
         model_type = getattr(model_hf_config, "model_type", None)
         chat_template = MODEL_TYPE_TO_CHAT_TEMPLATE.get(model_type, "chatml")
+        set_cfg_option_if_auto(cfg, "chat_template", chat_template)
 
         if cfg.datasets == "auto":
             if not cfg.train_data_uri:

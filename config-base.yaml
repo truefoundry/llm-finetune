@@ -16,6 +16,7 @@ mlfoundry_ml_repo: null
 # ---------------------
 # Auto computed and set by script based on environment and external state
 # Only edit them if you know what you are doing
+chat_template: auto # type: string
 data_dir: auto # type: string
 datasets: auto # type: list
 test_datasets: auto # type: list
@@ -53,7 +54,6 @@ base_model_ignore_patterns:
   - '*.ot'
   - '*.tflite'
   - '*.msgpack'
-chat_template: chatml
 dataset_prepared_path: ./outputs/data/last_run_prepared
 ddp_timeout: 21600
 deepspeed: ./deepspeed_configs/3_ds_z2_config.json
