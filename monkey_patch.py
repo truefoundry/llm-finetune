@@ -46,12 +46,6 @@ def patched_validate_config(cfg, capabilities: Optional[dict] = None):
     return DictDefault(dict(TruefoundryAxolotlInputConfig(**cfg.to_dict()).model_dump(exclude_unset=True)))
 
 
-def add_custom_prompt_strategies():
-    import custom_prompt_strategies
-
-    sys.modules["axolotl.prompt_strategies.custom_prompt_strategies"] = custom_prompt_strategies
-
-
 def patched_pretrain_hooks(cfg, trainer):
     # type: (DictDefault, AxolotlTrainer) -> None
     # Bad hack because axolotl is not flexible at the moment
@@ -127,9 +121,6 @@ def monkey_patch_axolotl_internals():
         axolotl.utils.config.validate_config = patched_validate_config
     else:
         raise ValueError("Did not find `validate_config` on `axolotl.utils.config`. " "This is required")
-
-    logger.info("Adding custom data prompt strategies...")
-    add_custom_prompt_strategies()
 
     if hasattr(axolotl.train, "pretrain_hooks"):
         logger.info("Patching pretrain_hooks...")

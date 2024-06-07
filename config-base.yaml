@@ -16,6 +16,7 @@ mlfoundry_ml_repo: null
 # ---------------------
 # Auto computed and set by script based on environment and external state
 # Only edit them if you know what you are doing
+chat_template: auto # type: string
 data_dir: auto # type: string
 datasets: auto # type: list
 test_datasets: auto # type: list
@@ -29,6 +30,10 @@ load_in_4bit: auto # type: bool
 lora_modules_to_save: auto # type: list
 resume_from_checkpoint: auto # type: bool
 special_tokens: auto  # type: dict
+unsloth_cross_entropy_loss: auto # type: bool
+unsloth_lora_mlp: auto # type: bool
+unsloth_lora_qkv: auto # type: bool
+unsloth_lora_o: auto # type: bool
 tf32: auto # type: bool
 ## Added by TrueFoundry, not native to Axolotl
 mlfoundry_run_name: auto # type: string
@@ -49,8 +54,8 @@ base_model_ignore_patterns:
   - '*.ot'
   - '*.tflite'
   - '*.msgpack'
-chat_template: chatml
 dataset_prepared_path: ./outputs/data/last_run_prepared
+dataset_processes: 1
 ddp_timeout: 21600
 deepspeed: ./deepspeed_configs/3_ds_z2_config.json
 default_system_message: You are a helpful assistant. Please give a long and detailed answer.
@@ -105,3 +110,4 @@ logging_dir: ./tensorboard_logs
 mlfoundry_log_checkpoints: True
 use_mflow: False
 use_wandb: False
+use_tensorboard: True
