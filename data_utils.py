@@ -33,14 +33,8 @@ def _make_dataset_file_source(
     The modules are present at axolotl.prompt_strategies.*
     The `load` function in the module is called with the tokenizer, cfg and ds_cfg
 
-    We are monkey patching our own prompt strategy module to handle openai format
-
     Ideally we want to use the HF tokenizers library to apply the base model's chat template
-    But axolotl's chat template strategy is flawed - It does ignore tokens in input correctly
-    So for now we are using the sharegpt strategy with chatml template.
-
-    Only reason to write our own strategy is to handle the openai format which has the conversation thread under the key `messages`
-    But sharegpt strategy expects the conversation thread under the key `conversations`
+    But axolotl's chat template strategy forces to select one of the built-in template.
     """
     if dataset_type == DatasetType.completion:
         return {
