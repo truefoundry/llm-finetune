@@ -88,9 +88,11 @@ def dataset_uri_to_axolotl_datasources(
         datasources = []
         if os.path.isdir(uri):
             for filepath in find_all_jsonl_files(uri):
-                datasources.append(_make_dataset_file_source(path=filepath, dataset_type=dataset_type))
+                datasources.append(
+                    _make_dataset_file_source(path=filepath, dataset_type=dataset_type, chat_template=chat_template)
+                )
         else:
-            datasources = [_make_dataset_file_source(path=uri, dataset_type=dataset_type)]
+            datasources = [_make_dataset_file_source(path=uri, dataset_type=dataset_type, chat_template=chat_template)]
         return datasources
     else:
         raise ValueError("Unsupported data uri or path does not exist: {uri}")
