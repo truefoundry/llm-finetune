@@ -32,7 +32,6 @@ accelerate launch \
 train.py \
 config-base.yaml \
 --deepspeed ./deepspeed_configs/3_ds_z2_config.json \
---flash_attention True \
 --base_model TinyLlama/TinyLlama-1.1B-Chat-v1.0 \
 --train_data_uri ./sample_data/chatalpaca-openai-100.jsonl \
 --val_data_uri None \

@@ -1,5 +1,5 @@
-# https://hub.docker.com/layers/winglian/axolotl/main-20240603-py3.11-cu121-2.3.0/images/sha256-e4b898a0f700eb86f9e802bb85c1ec6c509b2dec65d941ad43405fe323865017?context=explore
-FROM --platform=linux/amd64 winglian/axolotl@sha256:a66d1469cdad472779f6419ea67d0fbb2cce984244aa86f40c99abaa4a21b3db
+# https://hub.docker.com/layers/winglian/axolotl/main-20240612-py3.11-cu121-2.3.0/images/sha256-798eed818fb11d24a640c0efbf27f65fbaebc1d9a5db210d585aa2a4328e93e1?context=explore
+FROM --platform=linux/amd64 winglian/axolotl@sha256:aac52c92ab245793932a635e6dedf14a3a9fb009e40cdf16c10b715f1466afa8
 USER root
 COPY requirements.txt /tmp/
 RUN pip install -U pip wheel setuptools && \
@@ -9,7 +9,7 @@ RUN mkdir -p /packages && \
     cd /packages && \
     git clone https://github.com/truefoundry/axolotl && \
     cd axolotl/ && \
-    git checkout dffcb7adfb42dd3305fcabb0de106d5e2454315e
+    git checkout 0711bfeb6af7d359deb4ee2cae81ceb6890ebf80
 RUN cd /packages/axolotl/ && \
     MAX_JOBS=1 NVCC_APPEND_FLAGS="--threads 1" pip install -U --no-build-isolation -e .[flash-attn,mamba-ssm,fused-dense-lib] && \
     pip install --no-cache-dir -U -r /tmp/requirements.txt && \

@@ -22,8 +22,11 @@ datasets: auto # type: list
 test_datasets: auto # type: list
 bf16: auto # type: bool
 bfloat16: auto # type: bool
+flash_attention: auto # type: bool
+flash_attn_cross_entropy: auto # type: bool
 flash_attn_fuse_mlp: auto # type: bool
 flash_attn_fuse_qkv: auto # type: bool
+flash_attn_rms_norm: auto # type: bool
 float16: auto # type: bool
 fp16: auto # type: bool
 load_in_4bit: auto # type: bool
@@ -64,9 +67,6 @@ early_stopping_patience: 10
 eval_sample_packing: False
 eval_steps: 0.1
 eval_strategy: steps
-flash_attention: True
-flash_attn_cross_entropy: True
-flash_attn_rms_norm: True
 gradient_accumulation_steps: 4
 gradient_checkpointing: unsloth
 gradient_checkpointing_kwargs:
@@ -106,8 +106,10 @@ warmup_ratio: 0.1
 weight_decay: 0.01
 ## Added by TrueFoundry, not native to Axolotl
 cleanup_output_dir_on_start: False
+drop_long_sequences: False
 logging_dir: ./tensorboard_logs
 mlfoundry_log_checkpoints: True
+save_model_on_interrupt: False
 use_mflow: False
 use_wandb: False
 use_tensorboard: True

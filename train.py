@@ -15,6 +15,7 @@ from axolotl.cli.train import do_cli as axolotl_train_cli
 from axolotl.utils.dict import DictDefault
 from axolotl.utils.distributed import barrier, is_main_process, zero_first
 from axolotl.utils.models import load_tokenizer
+from rich import console, panel
 from transformers import AutoConfig
 from transformers.utils import is_torch_bf16_gpu_available, is_torch_tf32_available
 
@@ -38,7 +39,6 @@ logger = logging.getLogger("axolotl")
 # CURRENT LIMITATIONS
 # Axolotl sets report_to to None instead of "none"
 # There should be an option to add only missing special tokens
-# Cannot control truncation vs dropping when data exceeds sequence length
 # Have to hack axolotl module globals to hook our own code
 # micro batch size still needs to be decided by the user. 1 is okay because we are using sample packing now
 
@@ -56,8 +56,11 @@ MODEL_TYPE_TO_CHAT_TEMPLATE = {
     "phi3": "phi_3",
     "phi_3": "phi_3",
     "phi": "phi_3",
+    "mistral": "mistral",
+    "mixtral": "mistral",
     None: "chatml",
 }
+LOCAL_RANK = int(os.environ.get("LOCAL_RANK", 0))
 
 
 def set_cfg_option_if_auto(cfg, key, value, force=False):
@@ -101,6 +104,8 @@ def make_axolotl_config(config_base, kwargs, timestamp=None):
     axolotl_config = os.path.join(cfg.output_dir, "axolotl_config.yaml")
 
     if is_main_process():
+        import torch
+
         set_cfg_option_if_auto(cfg, "tokenizer_config", cfg.base_model_config or cfg.base_model)
 
         os.makedirs(cfg.data_dir, exist_ok=True)
@@ -146,12 +151,20 @@ def make_axolotl_config(config_base, kwargs, timestamp=None):
 
         set_cfg_option_if_auto(cfg, "eval_steps", 0.1)
         set_cfg_option_if_auto(cfg, "save_steps", 0.1)
-        set_cfg_option_if_auto(cfg, "tf32", is_torch_tf32_available())
+
+        is_ampere_or_newer = torch.cuda.get_device_capability(device=LOCAL_RANK) >= (8, 0)
+        is_tf32_supported = is_ampere_or_newer and is_torch_tf32_available()
+        is_bf16_supported = is_ampere_or_newer and is_torch_bf16_gpu_available()
+        set_cfg_option_if_auto(cfg, "tf32", is_tf32_supported)
         # TODO: Axolotl doesn't seem to do anything differently even though it says setting bfloat16/float16 will disable AMP
-        set_cfg_option_if_auto(cfg, "bf16", is_torch_bf16_gpu_available())
-        set_cfg_option_if_auto(cfg, "bfloat16", is_torch_bf16_gpu_available())
-        set_cfg_option_if_auto(cfg, "fp16", not is_torch_bf16_gpu_available())
-        set_cfg_option_if_auto(cfg, "float16", not is_torch_bf16_gpu_available())
+        set_cfg_option_if_auto(cfg, "bf16", is_bf16_supported)
+        set_cfg_option_if_auto(cfg, "bfloat16", is_bf16_supported)
+        set_cfg_option_if_auto(cfg, "fp16", not is_bf16_supported)
+        set_cfg_option_if_auto(cfg, "float16", not is_bf16_supported)
+
+        set_cfg_option_if_auto(cfg, "flash_attention", is_ampere_or_newer)
+        set_cfg_option_if_auto(cfg, "flash_attn_cross_entropy", is_ampere_or_newer)
+        set_cfg_option_if_auto(cfg, "flash_attn_rms_norm", is_ampere_or_newer)
 
         set_cfg_option_if_auto(cfg, "load_in_4bit", cfg.adapter == "qlora")
         set_cfg_option_if_auto(cfg, "flash_attn_fuse_mlp", cfg.adapter not in {"qlora", "lora"})
@@ -219,10 +232,9 @@ def make_axolotl_config(config_base, kwargs, timestamp=None):
     return axolotl_config
 
 
-def train_with_truefoundry(config_base: Path = Path("examples/"), **kwargs):
-    local_rank = int(os.environ.get("LOCAL_RANK", 0))
+def _train_with_truefoundry(config_base: Path = Path("examples/"), **kwargs):
     maybe_set_custom_tempdir()
-    maybe_set_torch_max_memory(device=local_rank)
+    maybe_set_torch_max_memory(device=LOCAL_RANK)
     timestamp = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H-%M-%S")
     with zero_first(is_main_process()):
         axolotl_config = make_axolotl_config(
@@ -282,31 +294,17 @@ def train_with_truefoundry(config_base: Path = Path("examples/"), **kwargs):
             run.end()
 
 
+def train_with_truefoundry(config_base: Path = Path("examples/"), **kwargs):
+    try:
+        _train_with_truefoundry(config_base=config_base, **kwargs)
+    except Exception as e:
+        c = console.Console()
+        error_message = (
+            f"Rank {LOCAL_RANK} failed with error: {str(e)}\nPlease see the following traceback for more details."
+        )
+        c.print(panel.Panel.fit(f"[red]{error_message}[/]", title="Error", border_style="bright_red"))
+        raise
+
+
 if __name__ == "__main__":
     fire.Fire(train_with_truefoundry)
-
-
-# def check_if_model_will_fit_only_with_gpus(
-#     model_id: str,
-#     revision: Optional[str],
-#     torch_dtype,
-# ):
-#     with init_empty_weights():
-#         config = AutoConfig.from_pretrained(
-#             model_id,
-#             revision=revision,
-#             trust_remote_code=True,
-#         )
-#         model = AutoModelForCausalLM.from_config(
-#             config=config,
-#             trust_remote_code=True,
-#             torch_dtype=torch_dtype,
-#             # low_cpu_mem_usage=True,
-#         )
-#     device_map = infer_auto_device_map(model, dtype=torch_dtype)
-#     logger.info(f"Inferred device_map for auto settings: {device_map}")
-#     if any(not isinstance(v, int) for v in device_map.values()):
-#         raise RuntimeError(
-#             "For lora/qlora the model must entirely fit on gpus without any kind of offloading to prevent bugs with merging! "
-#             "With the current configuration model is being offloaded to cpu/disk. This causes incorrect model saving. See https://github.com/huggingface/peft/issues/868"
-#         )
