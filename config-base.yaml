@@ -3,7 +3,7 @@ adapter: qlora
 base_model: TinyLlama/TinyLlama-1.1B-Chat-v1.0
 debug: False
 micro_batch_size: 1
-revision_of_model:
+revision_of_model: null
 sequence_len: 2048
 val_set_size: 0.1
 ## Added by TrueFoundry, not native to Axolotl

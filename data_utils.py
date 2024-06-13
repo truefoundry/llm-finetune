@@ -26,7 +26,9 @@ class DatasetType(str, enum.Enum):
 
 
 def _make_dataset_file_source(
-    path, split="train", dataset_type: DatasetType = DatasetType.completion, chat_template: str = "chatml"
+    path,
+    split="train",
+    dataset_type: DatasetType = DatasetType.completion,
 ):
     """
     Axolotl dynamically loads prompt strategies based on the `type` key
@@ -56,7 +58,6 @@ def _make_dataset_file_source(
             "path": path,
             "ds_type": "json",
             "type": "chat_template",
-            "chat_template": chat_template,
             "field_messages": "messages",
             "message_field_role": "role",
             "message_field_content": "content",
@@ -68,7 +69,9 @@ def _make_dataset_file_source(
 
 
 def dataset_uri_to_axolotl_datasources(
-    uri, download_dir, dataset_type: DatasetType = DatasetType.completion, chat_template: str = "chatml"
+    uri,
+    download_dir,
+    dataset_type: DatasetType = DatasetType.completion,
 ):
     # TODO: Add support for HF datasets
     if uri.startswith("https://"):
@@ -88,11 +91,9 @@ def dataset_uri_to_axolotl_datasources(
         datasources = []
         if os.path.isdir(uri):
             for filepath in find_all_jsonl_files(uri):
-                datasources.append(
-                    _make_dataset_file_source(path=filepath, dataset_type=dataset_type, chat_template=chat_template)
-                )
+                datasources.append(_make_dataset_file_source(path=filepath, dataset_type=dataset_type))
         else:
-            datasources = [_make_dataset_file_source(path=uri, dataset_type=dataset_type, chat_template=chat_template)]
+            datasources = [_make_dataset_file_source(path=uri, dataset_type=dataset_type)]
         return datasources
     else:
         raise ValueError("Unsupported data uri or path does not exist: {uri}")

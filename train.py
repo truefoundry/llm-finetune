@@ -178,7 +178,7 @@ def make_axolotl_config(config_base, kwargs, timestamp=None):
 
         if cfg.chat_template == "auto":
             model_type = getattr(model_hf_config, "model_type", None)
-            chat_template = MODEL_TYPE_TO_CHAT_TEMPLATE.get(model_type, "chatml")
+            chat_template = "tokenizer_default_fallback_" + MODEL_TYPE_TO_CHAT_TEMPLATE.get(model_type, "chatml")
             set_cfg_option_if_auto(cfg, "chat_template", chat_template)
 
         if cfg.datasets == "auto":
@@ -188,7 +188,6 @@ def make_axolotl_config(config_base, kwargs, timestamp=None):
                 uri=cfg.train_data_uri,
                 download_dir=cfg.data_dir,
                 dataset_type=cfg.dataset_type,
-                chat_template=cfg.chat_template,
             )
         if cfg.test_datasets == "auto":
             if cfg.val_data_uri and str(cfg.val_data_uri).lower() != "na":
@@ -196,7 +195,6 @@ def make_axolotl_config(config_base, kwargs, timestamp=None):
                     uri=cfg.val_data_uri,
                     download_dir=cfg.data_dir,
                     dataset_type=cfg.dataset_type,
-                    chat_template=chat_template,
                 )
             elif cfg.val_set_size:
                 set_cfg_option_if_auto(cfg, "test_datasets", None, force=True)
@@ -220,7 +218,7 @@ def make_axolotl_config(config_base, kwargs, timestamp=None):
             cfg["special_tokens"]["pad_token"] = tokenizer.eos_token
         set_cfg_option_if_auto(cfg, "lora_modules_to_save", [])
         logger.info(f"Prepared config: {cfg}")
-        # This hack is needed because yaml dump refuses to tread DictDefault as dict
+        # This hack is needed because yaml dump refuses to treat DictDefault as dict
         yaml.add_representer(
             DictDefault, lambda dumper, data: dumper.represent_mapping("tag:yaml.org,2002:map", data.items())
         )
