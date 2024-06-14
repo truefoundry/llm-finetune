@@ -104,13 +104,13 @@ def maybe_set_torch_max_memory(device: int):
 
 
 @contextlib.contextmanager
-def temporarily_unset_accelerate_envs():
-    accelerate_envs = {}
+def temporarily_unset_distributed_envs():
+    old_envs = {}
     for key in os.environ:
-        if key.startswith("ACCELERATE_"):
-            accelerate_envs[key] = os.environ.pop(key)
+        if key.startswith("ACCELERATE_") or key in {"WORLD_SIZE"}:
+            old_envs[key] = os.environ.pop(key)
     yield
-    os.environ.update(accelerate_envs)
+    os.environ.update(old_envs)
 
 
 # Notebook Utils

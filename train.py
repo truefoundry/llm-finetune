@@ -30,7 +30,7 @@ from mlfoundry_utils import (
 from utils import (
     maybe_set_custom_tempdir,
     maybe_set_torch_max_memory,
-    temporarily_unset_accelerate_envs,
+    temporarily_unset_distributed_envs,
     try_cleanup_gpus,
 )
 
@@ -252,7 +252,7 @@ def _train_with_truefoundry(config_base: Path = Path("examples/"), **kwargs):
         model_dir = cfg.output_dir
         cleanup_checkpoints(output_dir=cfg.output_dir)
         if cfg.adapter in {"lora", "qlora"}:
-            with temporarily_unset_accelerate_envs():
+            with temporarily_unset_distributed_envs():
                 axolotl_merge_lora_cli(config=axolotl_config, device_map="auto")
             model_dir = os.path.join(model_dir, "merged")
             model_parent_dir = os.path.dirname(model_dir)
