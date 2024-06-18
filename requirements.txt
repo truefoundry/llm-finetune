@@ -1,6 +1,6 @@
 --extra-index-url https://download.pytorch.org/whl/cu121
 cloud-files==4.15.2
-deepspeed @ git+https://github.com/truefoundry/DeepSpeed@f706f516730bb4a175870b35372e00af8c27a258
+deepspeed @ git+https://github.com/truefoundry/DeepSpeed@1372f3d1937030f20283b6bfdb7209c55eb8a7bf
 pyarrow==15.0.0
 rich>=13.0.0,<14
 snowflake-connector-python[pandas]==3.7.0
