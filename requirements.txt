@@ -1,9 +1,9 @@
 --extra-index-url https://download.pytorch.org/whl/cu121
 cloud-files==4.15.2
-deepspeed @ git+https://github.com/truefoundry/DeepSpeed@1372f3d1937030f20283b6bfdb7209c55eb8a7bf
+deepspeed @ git+https://github.com/microsoft/DeepSpeed@88b2ef71b3f2dfc42932cd2c097397f637ad77f4
 pyarrow==15.0.0
 rich>=13.0.0,<14
 snowflake-connector-python[pandas]==3.7.0
 torch==2.3.0+cu121
-truefoundry[ml]==0.2.4
-unsloth @ git+https://github.com/unslothai/unsloth@27fa021a7bb959a53667dd4e7cdb9598c207aa0d
+truefoundry[ml]==0.2.8
+unsloth @ git+https://github.com/unslothai/unsloth@a558f22992813209ef9a369da8ef5163e9782258

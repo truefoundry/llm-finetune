@@ -70,7 +70,9 @@ def log_model_to_mlfoundry(
             logger.warning("Python file in hf model cache in unknown path:", file_path)
 
     metadata.update({"huggingface_model_url": f"https://huggingface.co/{hf_hub_model_id}"})
-
+    metadata = {
+        k: v for k, v in metadata.items() if isinstance(v, (int, float, np.integer, np.floating)) and math.isfinite(v)
+    }
     run.log_model(
         name=model_name,
         model_file_or_folder=model_dir,
@@ -171,6 +173,12 @@ class MLFoundryCallback(TrainerCallback):
         for log in state.log_history:
             if isinstance(log, dict) and log.get("step") == state.global_step:
                 metadata = log.copy()
+
+        metadata = {
+            k: v
+            for k, v in metadata.items()
+            if isinstance(v, (int, float, np.integer, np.floating)) and math.isfinite(v)
+        }
         self._run.log_artifact(
             name=self._checkpoint_artifact_name,
             artifact_paths=[(artifact_path,)],
