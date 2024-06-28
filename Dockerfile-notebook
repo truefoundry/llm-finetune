@@ -21,7 +21,7 @@ USER jovyan
 RUN cd /packages && \
     git clone https://github.com/truefoundry/axolotl && \
     cd axolotl/ && \
-    git checkout 6a3ca76d3876ba7d9de9480cd203a8356e7279a7
+    git checkout d070b883055766197c5469a5cc51a3d91296579e
 RUN cd /packages/axolotl/ && \
     MAX_JOBS=1 NVCC_APPEND_FLAGS="--threads 1" pip install -U --no-build-isolation -e .[flash-attn,mamba-ssm,fused-dense-lib] && \
     pip install --no-cache-dir -U -r /tmp/llm-finetune/notebook-requirements.txt
