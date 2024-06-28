@@ -96,7 +96,7 @@ def dataset_uri_to_axolotl_datasources(
             datasources = [_make_dataset_file_source(path=uri, dataset_type=dataset_type)]
         return datasources
     else:
-        raise ValueError("Unsupported data uri or path does not exist: {uri}")
+        raise ValueError(f"Unsupported data uri or path does not exist: {uri}")
 
 
 # --- Reference Notes ---
