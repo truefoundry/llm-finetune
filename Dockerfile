@@ -9,7 +9,7 @@ RUN mkdir -p /packages && \
     cd /packages && \
     git clone https://github.com/truefoundry/axolotl && \
     cd axolotl/ && \
-    git checkout d070b883055766197c5469a5cc51a3d91296579e
+    git checkout beb43a96d91273da42ec454d772de144ec5f8d6d
 RUN cd /packages/axolotl/ && \
     MAX_JOBS=1 NVCC_APPEND_FLAGS="--threads 1" pip install -U --no-build-isolation -e .[flash-attn,mamba-ssm,fused-dense-lib] && \
     pip install --no-cache-dir -U -r /tmp/requirements.txt && \

@@ -69,7 +69,14 @@ def log_model_to_mlfoundry(
         else:
             logger.warning("Python file in hf model cache in unknown path:", file_path)
 
-    metadata.update({"huggingface_model_url": f"https://huggingface.co/{hf_hub_model_id}"})
+    metadata.update(
+        {
+            "pipeline_tag": "text-generation",
+            "library_name": "transformers",
+            "base_model": hf_hub_model_id,
+            "huggingface_model_url": f"https://huggingface.co/{hf_hub_model_id}",
+        }
+    )
     metadata = {
         k: v for k, v in metadata.items() if isinstance(v, (int, float, np.integer, np.floating)) and math.isfinite(v)
     }
