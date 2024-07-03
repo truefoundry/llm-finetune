@@ -21,6 +21,17 @@ TFY_INTERNAL_JOB_NAME = os.getenv("TFY_INTERNAL_COMPONENT_NAME")
 TFY_INTERNAL_JOB_RUN_NAME = os.getenv("TFY_INTERNAL_JOB_RUN_NAME")
 
 
+def _drop_non_finite_values(dct: Dict[str, Any]) -> Dict[str, Any]:
+    sanitized = {}
+    for k, v in dct.items():
+        if isinstance(v, (int, float, np.integer, np.floating)):
+            if not math.isfinite(v):
+                logger.warning(f"Dropping non-finite value for key={k} value={v!r}")
+                continue
+        sanitized[k] = v
+    return sanitized
+
+
 def is_mlfoundry_artifact(value: str):
     # TODO (chiragjn): This should be made more strict
     if value.startswith(MLFOUNDRY_ARTIFACT_PREFIX):
@@ -77,9 +88,7 @@ def log_model_to_mlfoundry(
             "huggingface_model_url": f"https://huggingface.co/{hf_hub_model_id}",
         }
     )
-    metadata = {
-        k: v for k, v in metadata.items() if isinstance(v, (int, float, np.integer, np.floating)) and math.isfinite(v)
-    }
+    metadata = _drop_non_finite_values(metadata)
     run.log_model(
         name=model_name,
         model_file_or_folder=model_dir,
@@ -180,12 +189,7 @@ class MLFoundryCallback(TrainerCallback):
         for log in state.log_history:
             if isinstance(log, dict) and log.get("step") == state.global_step:
                 metadata = log.copy()
-
-        metadata = {
-            k: v
-            for k, v in metadata.items()
-            if isinstance(v, (int, float, np.integer, np.floating)) and math.isfinite(v)
-        }
+        metadata = _drop_non_finite_values(metadata)
         self._run.log_artifact(
             name=self._checkpoint_artifact_name,
             artifact_paths=[(artifact_path,)],
