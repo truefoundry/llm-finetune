@@ -233,4 +233,8 @@ def maybe_log_params_to_mlfoundry(run: mlfoundry.MlFoundryRun, params: Dict[str,
         logger.warning("Skipping logging params because they already exist")
     else:
         params = copy.deepcopy(params)
-        run.log_params(params, flatten_params=False)
+        batch_size = 50
+        items = list(params.items())
+        for idx in range(0, len(items), batch_size):
+            mini_batch = dict(items[idx : idx + batch_size])
+            run.log_params(mini_batch, flatten_params=False)

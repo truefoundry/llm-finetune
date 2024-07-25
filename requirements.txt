@@ -9,3 +9,4 @@ torchao==0.3.1+cu121
 truefoundry[ml]==0.3.0rc7
 unsloth @ git+https://github.com/unslothai/unsloth@d1f3b6c1c4f69cd09ebdcab014bd72ac1217ee71
 transformers==4.43.2
+accelerate==0.33.0
