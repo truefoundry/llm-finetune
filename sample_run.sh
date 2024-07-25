@@ -2,15 +2,15 @@
 
 # --- Environment variables ---
 export DISABLE_MLFLOW_INTEGRATION=True
-export PYTORCH_CUDA_ALLOC_CONF="expandable_segments:True"
+export PYTORCH_CUDA_ALLOC_CONF="expandable_segments:True,roundup_power2_divisions:16"
 
 ## This controls how many GPUs you want to use
-export CUDA_VISIBLE_DEVICES=0
+export CUDA_VISIBLE_DEVICES=0,1
 ## This controls how much memory to user per gpu
 export TORCH_PER_PROCESS_MEMORY_LIMIT=0.99
 
 ## Add your token for private/gated models
-# export HF_TOKEN=
+export HF_TOKEN=
 
 ## Turn these on for debugging
 # export CUDA_LAUNCH_BLOCKING=1
@@ -24,7 +24,7 @@ CLEANUP_OUTPUT_DIR_ON_START=True
 ## You can logs metrics, checkpoints and final model with TrueFoundry Experiment Tracking
 MLFOUNDRY_ENABLE_REPORTING=False
 MLFOUNDRY_ML_REPO=llm-finetuning
-MLFOUNDRY_RUN_NAME=my-finetuning-run-name
+MLFOUNDRY_RUN_NAME=my-finetuning-run-name-1
 
 accelerate launch \
 --mixed_precision bf16 \
@@ -32,7 +32,7 @@ accelerate launch \
 train.py \
 config-base.yaml \
 --deepspeed ./deepspeed_configs/3_ds_z2_config.json \
---base_model TinyLlama/TinyLlama-1.1B-Chat-v1.0 \
+--base_model meta-llama/Meta-Llama-3.1-8B-Instruct \
 --train_data_uri ./sample_data/chatalpaca-openai-100.jsonl \
 --val_data_uri None \
 --val_set_size 0.1 \
@@ -41,7 +41,7 @@ config-base.yaml \
 --max_steps 0 \
 --micro_batch_size 1 \
 --eval_batch_size 1 \
---num_epochs 1 \
+--num_epochs 3 \
 --gradient_accumulation_steps 4 \
 --gradient_checkpointing unsloth \
 --learning_rate 0.00001 \
@@ -60,5 +60,5 @@ config-base.yaml \
 --mlfoundry_ml_repo $MLFOUNDRY_ML_REPO \
 --mlfoundry_run_name $MLFOUNDRY_RUN_NAME \
 --mlfoundry_log_checkpoints True \
---resume_from_checkpoint True \
+--resume_from_checkpoint False \
 --cleanup_output_dir_on_start $CLEANUP_OUTPUT_DIR_ON_START

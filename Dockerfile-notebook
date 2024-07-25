@@ -1,4 +1,4 @@
-FROM truefoundrycloud/jupyter:0.2.19-sudo
+FROM truefoundrycloud/jupyter:0.2.20-sudo
 ENV TORCH_CUDA_ARCH_LIST="7.0 7.5 8.0 8.6 8.9 9.0+PTX"
 ENV DEBIAN_FRONTEND=noninteractive
 USER root
@@ -21,9 +21,9 @@ USER jovyan
 RUN cd /packages && \
     git clone https://github.com/truefoundry/axolotl && \
     cd axolotl/ && \
-    git checkout bfe2d6b2e5019a8d4486ac8a7726089928e6b3a6
+    git checkout f16448e84b6135a377512eca79c306d5acf035f6
 RUN cd /packages/axolotl/ && \
-    MAX_JOBS=1 NVCC_APPEND_FLAGS="--threads 1" pip install -U --no-build-isolation -e .[flash-attn,mamba-ssm,fused-dense-lib] && \
+    MAX_JOBS=1 NVCC_APPEND_FLAGS="--threads 1" pip install -U --no-build-isolation -e .[flash-attn,mamba-ssm,fused-dense-lib,optimizers] && \
     pip install --no-cache-dir -U -r /tmp/llm-finetune/notebook-requirements.txt
 COPY --chown=jovyan:users . /tmp_home/jovyan/llm-finetune/
 ENV JUPYTER_APP_LAUNCHER_PATH=/home/jovyan/llm-finetune/.jp_app_launcher/

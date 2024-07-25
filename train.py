@@ -175,6 +175,8 @@ def make_axolotl_config(config_base, kwargs, timestamp=None):
         set_cfg_option_if_auto(cfg, "unsloth_lora_mlp", use_unsloth)
         set_cfg_option_if_auto(cfg, "unsloth_lora_qkv", use_unsloth)
         set_cfg_option_if_auto(cfg, "unsloth_lora_o", use_unsloth)
+        set_cfg_option_if_auto(cfg, "unsloth_rms_norm", use_unsloth)
+        set_cfg_option_if_auto(cfg, "unsloth_rope", use_unsloth)
 
         if cfg.chat_template == "auto":
             model_type = getattr(model_hf_config, "model_type", None)

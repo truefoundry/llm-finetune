@@ -37,6 +37,8 @@ unsloth_cross_entropy_loss: auto # type: bool
 unsloth_lora_mlp: auto # type: bool
 unsloth_lora_qkv: auto # type: bool
 unsloth_lora_o: auto # type: bool
+unsloth_rms_norm: auto # type: bool
+unsloth_rope: auto # type: bool
 tf32: auto # type: bool
 ## Added by TrueFoundry, not native to Axolotl
 mlfoundry_run_name: auto # type: string
@@ -67,6 +69,7 @@ early_stopping_patience: 10
 eval_sample_packing: False
 eval_steps: 0.1
 eval_strategy: steps
+fix_untrained_tokens: true
 gradient_accumulation_steps: 4
 gradient_checkpointing: unsloth
 gradient_checkpointing_kwargs:
