@@ -85,6 +85,7 @@ jobs:
         with:
           context: .
           file: Dockerfile
+          platforms: linux/amd64
           push: true
           tags: ${{ env.IMAGE_TAG_1 }},${{ env.IMAGE_TAG_2 }},${{ env.IMAGE_TAG_3 }}
           cache-from: type=registry,ref=${{ env.REPOSITORY_URI }}:buildcache
@@ -151,6 +152,7 @@ jobs:
         with:
           context: .
           file: Dockerfile-notebook
+          platforms: linux/amd64
           push: true
           tags: ${{ env.IMAGE_TAG_1 }}
           cache-from: type=registry,ref=${{ env.REPOSITORY_URI }}:jupyter-buildcache
