@@ -15,6 +15,8 @@ from mlfoundry_utils import (
 
 logger = logging.getLogger("axolotl")
 
+CHECKPOINT_PREFIX = "checkpoint-"
+
 
 def download_last_checkpoint_if_present(ml_repo: str, checkpoint_artifact_name: str, local_dir: str) -> Optional[str]:
     latest_checkpoint_artifact = get_latest_checkpoint_artifact_version_or_none(
@@ -162,5 +164,31 @@ def cleanup_checkpoints(
     logger.info("Cleaning up older checkpoints...")
     for f in os.listdir(output_dir):
         f_path = os.path.join(output_dir, f)
-        if os.path.isdir(f_path) and f.startswith("checkpoint-"):
+        if os.path.isdir(f_path) and f.startswith(CHECKPOINT_PREFIX):
             shutil.rmtree(f_path)
+            pass
+
+
+def get_step_for_final_model(output_dir: str, load_best_model_at_end: bool) -> Optional[int]:
+    try:
+        if not os.path.exists(output_dir):
+            return None
+        last_checkpoint_dir_path = get_last_checkpoint(output_dir)
+        if last_checkpoint_dir_path:
+            if not load_best_model_at_end:
+                step = int(os.path.basename(last_checkpoint_dir_path).split(CHECKPOINT_PREFIX, 1)[1])
+                return step
+
+        trainer_state_file = os.path.join(last_checkpoint_dir_path, "trainer_state.json")
+        if not os.path.exists(trainer_state_file):
+            return None
+        with open(trainer_state_file) as trainer_state_f:
+            trainer_state = json.load(trainer_state_f)
+        if "best_model_checkpoint" not in trainer_state:
+            return None
+        best_checkpoint_name = os.path.basename(trainer_state["best_model_checkpoint"])
+        best_step = int(best_checkpoint_name.split(CHECKPOINT_PREFIX, 1)[1])
+        return best_step
+    except Exception as e:
+        logger.warning(f"Unable to extract the last/best checkpoint step. Error: {e}")
+    return None

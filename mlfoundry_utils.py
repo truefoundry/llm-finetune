@@ -56,6 +56,7 @@ def log_model_to_mlfoundry(
     model_dir: str,
     hf_hub_model_id: str,
     metadata: Optional[Dict[str, Any]] = None,
+    step: Optional[int] = None,
 ):
     metadata = metadata or {}
     logger.info("Uploading Model...")
@@ -94,6 +95,7 @@ def log_model_to_mlfoundry(
         model_file_or_folder=model_dir,
         framework=mlfoundry.ModelFramework.TRANSFORMERS,
         metadata=metadata,
+        step=step or 0,
     )
 
 

@@ -19,7 +19,11 @@ from rich import console, panel
 from transformers import AutoConfig
 from transformers.utils import is_torch_bf16_gpu_available, is_torch_tf32_available
 
-from checkpoint_utils import cleanup_checkpoints, get_last_checkpoint_for_resume_if_any
+from checkpoint_utils import (
+    cleanup_checkpoints,
+    get_last_checkpoint_for_resume_if_any,
+    get_step_for_final_model,
+)
 from data_utils import dataset_uri_to_axolotl_datasources
 from mlfoundry_utils import (
     get_or_create_run,
@@ -252,6 +256,9 @@ def _train_with_truefoundry(config_base: Path = Path("examples/"), **kwargs):
     if is_main_process():
         cfg = load_config_file(path=axolotl_config)
         model_dir = cfg.output_dir
+        log_step = get_step_for_final_model(
+            output_dir=cfg.output_dir, load_best_model_at_end=cfg.load_best_model_at_end
+        )
         cleanup_checkpoints(output_dir=cfg.output_dir)
         if cfg.adapter in {"lora", "qlora"}:
             with temporarily_unset_distributed_envs():
@@ -290,7 +297,7 @@ def _train_with_truefoundry(config_base: Path = Path("examples/"), **kwargs):
                 model_dir=model_dir,
                 hf_hub_model_id=cfg.base_model,
                 metadata={},
-                # TODO (chiragjn): Need to add step here to link with metrics!
+                step=log_step,
             )
             run.end()
 
