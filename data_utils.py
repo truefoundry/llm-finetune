@@ -63,6 +63,8 @@ def _make_dataset_file_source(
             "message_field_content": "content",
             "roles": {"system": ["system"], "user": ["user", "human"], "assistant": ["assistant"], "tool": ["tool"]},
             "split": split,
+            "roles_to_train": ["gpt", "assistant"],
+            "train_on_eos": "last",
         }
     else:
         raise ValueError(f"Unsupported dataset type: {dataset_type}")
