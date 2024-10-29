@@ -1,6 +1,7 @@
-from monkey_patch import monkey_patch_axolotl_internals
+import axolotl.logging_config
 
-monkey_patch_axolotl_internals()
+axolotl.logging_config.configure_logging()
+
 
 import logging
 import os
@@ -16,7 +17,6 @@ from axolotl.utils.dict import DictDefault
 from axolotl.utils.distributed import barrier, is_main_process, zero_first
 from axolotl.utils.models import load_tokenizer
 from rich import console, panel
-from transformers import AutoConfig
 from transformers.utils import is_torch_bf16_gpu_available, is_torch_tf32_available
 
 from checkpoint_utils import (
@@ -89,8 +89,6 @@ def make_axolotl_config(config_base, kwargs, timestamp=None):
             if os.path.exists(cfg.output_dir):
                 shutil.rmtree(cfg.output_dir)
 
-    model_hf_config = AutoConfig.from_pretrained(cfg.base_model, trust_remote_code=True)
-
     data_dir = os.path.join(os.path.abspath(cfg.output_dir), "data")
     set_cfg_option_if_auto(cfg, "data_dir", data_dir)
     cfg.output_dir = os.path.join(os.path.abspath(cfg.output_dir), "model")
@@ -105,32 +103,32 @@ def make_axolotl_config(config_base, kwargs, timestamp=None):
         os.makedirs(cfg.output_dir, exist_ok=True)
 
         run = None
-        if cfg.mlfoundry_enable_reporting is True:
+        if cfg.truefoundry_ml_enable_reporting is True:
             if TFY_INTERNAL_JOB_RUN_NAME:
                 fallback_run_name = f"finetune-{sanitize_name(TFY_INTERNAL_JOB_RUN_NAME)}"
             else:
                 fallback_run_name = f"finetune-{timestamp}"
-            set_cfg_option_if_auto(cfg, "mlfoundry_run_name", fallback_run_name)
+            set_cfg_option_if_auto(cfg, "truefoundry_ml_run_name", fallback_run_name)
 
             run = get_or_create_run(
-                ml_repo=cfg.mlfoundry_ml_repo,
-                run_name=cfg.mlfoundry_run_name,
+                ml_repo=cfg.truefoundry_ml_repo,
+                run_name=cfg.truefoundry_ml_run_name,
                 auto_end=False,
             )
 
-            if cfg.mlfoundry_log_checkpoints is True:
+            if cfg.truefoundry_ml_log_checkpoints is True:
                 if TFY_INTERNAL_JOB_RUN_NAME:
-                    mlfoundry_checkpoint_artifact_name = f"ckpt-{sanitize_name(TFY_INTERNAL_JOB_RUN_NAME)}"
+                    truefoundry_ml_checkpoint_artifact_name = f"ckpt-{sanitize_name(TFY_INTERNAL_JOB_RUN_NAME)}"
                 else:
-                    mlfoundry_checkpoint_artifact_name = f"ckpt-{run.run_name}"
+                    truefoundry_ml_checkpoint_artifact_name = f"ckpt-{run.run_name}"
                 set_cfg_option_if_auto(
                     cfg,
-                    "mlfoundry_checkpoint_artifact_name",
-                    mlfoundry_checkpoint_artifact_name,
+                    "truefoundry_ml_checkpoint_artifact_name",
+                    truefoundry_ml_checkpoint_artifact_name,
                 )
             else:
-                cfg.mlfoundry_log_checkpoints = False
-                cfg.mlfoundry_checkpoint_artifact_name = None
+                cfg.truefoundry_ml_log_checkpoints = False
+                cfg.truefoundry_ml_checkpoint_artifact_name = None
 
         if cfg.resume_from_checkpoint == "auto":
             resume_from_checkpoint = True
@@ -139,9 +137,9 @@ def make_axolotl_config(config_base, kwargs, timestamp=None):
         last_checkpoint_dir = get_last_checkpoint_for_resume_if_any(
             output_dir=cfg.output_dir,
             resume_from_checkpoint=resume_from_checkpoint,
-            mlfoundry_enable_reporting=cfg.mlfoundry_enable_reporting,
-            mlfoundry_ml_repo=cfg.mlfoundry_ml_repo,
-            mlfoundry_checkpoint_artifact_name=cfg.mlfoundry_checkpoint_artifact_name,
+            mlfoundry_enable_reporting=cfg.truefoundry_ml_enable_reporting,
+            mlfoundry_ml_repo=cfg.truefoundry_ml_repo,
+            mlfoundry_checkpoint_artifact_name=cfg.truefoundry_ml_checkpoint_artifact_name,
         )
         cfg.resume_from_checkpoint = last_checkpoint_dir
 
@@ -272,13 +270,13 @@ def _train_with_truefoundry(config_base: Path = Path("examples/"), **kwargs):
             if os.path.exists(readme_path):
                 shutil.copy2(readme_path, os.path.join(model_dir, "README.md"))
             logger.info(f"Merged model has been saved to {model_dir}")
-        if cfg.mlfoundry_enable_reporting is True:
+        if cfg.truefoundry_ml_enable_reporting is True:
             *_, model_name = cfg.base_model.rsplit("/", 1)
             model_name = "-".join(["finetuned", model_name, timestamp])
             model_name = sanitize_name(model_name)
             run = get_or_create_run(
-                ml_repo=cfg.mlfoundry_ml_repo,
-                run_name=cfg.mlfoundry_run_name,
+                ml_repo=cfg.truefoundry_ml_repo,
+                run_name=cfg.truefoundry_ml_run_name,
                 auto_end=False,
             )
             log_model_to_mlfoundry(

@@ -6,12 +6,6 @@ micro_batch_size: 1
 revision_of_model: null
 sequence_len: 2048
 val_set_size: 0.1
-## Added by TrueFoundry, not native to Axolotl
-train_data_uri: null
-val_data_uri: null
-dataset_type: chat  # Can be completion | chat
-mlfoundry_enable_reporting: False
-mlfoundry_ml_repo: null
 
 # ---------------------
 # Auto computed and set by script based on environment and external state
@@ -39,9 +33,6 @@ unsloth_lora_o: auto # type: bool
 unsloth_rms_norm: auto # type: bool
 unsloth_rope: auto # type: bool
 tf32: auto # type: bool
-## Added by TrueFoundry, not native to Axolotl
-mlfoundry_run_name: auto # type: string
-mlfoundry_checkpoint_artifact_name: auto # type: string
 
 
 # ---------------------
@@ -72,7 +63,7 @@ eval_steps: 0.1
 eval_strategy: steps
 fix_untrained_tokens: true
 gradient_accumulation_steps: 4
-gradient_checkpointing: unsloth
+gradient_checkpointing: True
 gradient_checkpointing_kwargs:
   use_reentrant: True
 learning_rate: 0.00001
@@ -94,6 +85,7 @@ num_epochs: 10
 optimizer: adamw_torch_fused
 output_dir: ./outputs
 plugins:
+  - axolotl_truefoundry.TrueFoundryMLPlugin
   - axolotl.integrations.liger.LigerPlugin
 pad_to_sequence_len: True
 remove_unused_columns: True
@@ -114,16 +106,26 @@ warmup_ratio: 0.1
 weight_decay: 0.01
 use_mflow: False
 use_wandb: False
+use_tensorboard: True
 
+# ---------------------
 # Plugin specific configs
+
+## TrueFoundry
+cleanup_output_dir_on_start: False
+dataset_type: chat  # Can be completion | chat
+drop_long_sequences: False
+logging_dir: ./tensorboard_logs
+truefoundry_ml_run_name: auto # type: string
+save_model_on_interrupt: False
+train_data_uri: null
+truefoundry_ml_checkpoint_artifact_name: auto # type: string
+truefoundry_ml_enable_reporting: False
+truefoundry_ml_log_checkpoints: True
+truefoundry_ml_repo: null
+val_data_uri: null
+
+## Liger
 liger_rms_norm: True
 liger_swiglu: True
 liger_fused_linear_cross_entropy: True
-
-## Added by TrueFoundry, not native to Axolotl
-cleanup_output_dir_on_start: False
-drop_long_sequences: False
-logging_dir: ./tensorboard_logs
-mlfoundry_log_checkpoints: True
-save_model_on_interrupt: False
-use_tensorboard: True

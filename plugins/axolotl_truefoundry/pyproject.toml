@@ -1,0 +1,26 @@
+[build-system]
+build-backend = "setuptools.build_meta"
+requires = ["setuptools>=61.0", "wheel>=0.37.1"]
+
+[project]
+name = "axolotl_truefoundry"
+version = "0.0.1"
+description = "TrueFoundry plugin for Axolotl"
+requires-python = ">=3.8.1,<4.0"
+dependencies = [
+    "transformers>=4.0.0,<5",
+    "truefoundry==0.4.4rc10",
+    "pynvml>=11.0.0,<12",
+    "torch>=2.3.0,<3",
+    "pydantic>=2.0.0,<3",
+]
+
+[tool.setuptools]
+# https://setuptools.pypa.io/en/latest/userguide/pyproject_config.html
+platforms = ["Linux", "Windows"]
+include-package-data = true
+zip-safe = true
+
+
+[tool.setuptools.packages.find]
+exclude = ["tests", "tests.*", "examples"]

@@ -1,6 +1,6 @@
 --extra-index-url https://download.pytorch.org/whl/cu121
 cloud-files==4.26.0
-deepspeed==0.15.3
+deepspeed==0.14.5
 pyarrow==15.0.0
 rich>=13.0.0,<14
 snowflake-connector-python[pandas]==3.12.3
