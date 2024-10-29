@@ -53,17 +53,6 @@ DEFAULT_PAD_TOKEN = "<pad>"
 DEFAULT_EOS_TOKEN = "</s>"
 DEFAULT_BOS_TOKEN = "<s>"
 DEFAULT_UNK_TOKEN = "<unk>"
-MODEL_TYPE_TO_CHAT_TEMPLATE = {
-    "llama": "llama3",
-    "gemma": "gemma",
-    "cohere": "cohere",
-    "phi3": "phi_3",
-    "phi_3": "phi_3",
-    "phi": "phi_3",
-    "mistral": "mistral",
-    "mixtral": "mistral",
-    None: "chatml",
-}
 LOCAL_RANK = int(os.environ.get("LOCAL_RANK", 0))
 
 
@@ -127,7 +116,6 @@ def make_axolotl_config(config_base, kwargs, timestamp=None):
                 ml_repo=cfg.mlfoundry_ml_repo,
                 run_name=cfg.mlfoundry_run_name,
                 auto_end=False,
-                create_ml_repo=False,
             )
 
             if cfg.mlfoundry_log_checkpoints is True:
@@ -135,7 +123,11 @@ def make_axolotl_config(config_base, kwargs, timestamp=None):
                     mlfoundry_checkpoint_artifact_name = f"ckpt-{sanitize_name(TFY_INTERNAL_JOB_RUN_NAME)}"
                 else:
                     mlfoundry_checkpoint_artifact_name = f"ckpt-{run.run_name}"
-                set_cfg_option_if_auto(cfg, "mlfoundry_checkpoint_artifact_name", mlfoundry_checkpoint_artifact_name)
+                set_cfg_option_if_auto(
+                    cfg,
+                    "mlfoundry_checkpoint_artifact_name",
+                    mlfoundry_checkpoint_artifact_name,
+                )
             else:
                 cfg.mlfoundry_log_checkpoints = False
                 cfg.mlfoundry_checkpoint_artifact_name = None
@@ -156,7 +148,10 @@ def make_axolotl_config(config_base, kwargs, timestamp=None):
         set_cfg_option_if_auto(cfg, "eval_steps", 0.1)
         set_cfg_option_if_auto(cfg, "save_steps", 0.1)
 
-        is_ampere_or_newer = torch.cuda.get_device_capability(device=LOCAL_RANK) >= (8, 0)
+        is_ampere_or_newer = torch.cuda.get_device_capability(device=LOCAL_RANK) >= (
+            8,
+            0,
+        )
         is_tf32_supported = is_ampere_or_newer and is_torch_tf32_available()
         is_bf16_supported = is_ampere_or_newer and is_torch_bf16_gpu_available()
         set_cfg_option_if_auto(cfg, "tf32", is_tf32_supported)
@@ -181,11 +176,6 @@ def make_axolotl_config(config_base, kwargs, timestamp=None):
         set_cfg_option_if_auto(cfg, "unsloth_lora_o", use_unsloth)
         set_cfg_option_if_auto(cfg, "unsloth_rms_norm", use_unsloth)
         set_cfg_option_if_auto(cfg, "unsloth_rope", use_unsloth)
-
-        if cfg.chat_template == "auto":
-            model_type = getattr(model_hf_config, "model_type", None)
-            chat_template = "tokenizer_default_fallback_" + MODEL_TYPE_TO_CHAT_TEMPLATE.get(model_type, "chatml")
-            set_cfg_option_if_auto(cfg, "chat_template", chat_template)
 
         if cfg.datasets == "auto":
             if not cfg.train_data_uri:
@@ -226,7 +216,8 @@ def make_axolotl_config(config_base, kwargs, timestamp=None):
         logger.info(f"Prepared config: {cfg}")
         # This hack is needed because yaml dump refuses to treat DictDefault as dict
         yaml.add_representer(
-            DictDefault, lambda dumper, data: dumper.represent_mapping("tag:yaml.org,2002:map", data.items())
+            DictDefault,
+            lambda dumper, data: dumper.represent_mapping("tag:yaml.org,2002:map", data.items()),
         )
         print(f"Saving axolotl config to {axolotl_config}")
         with open(axolotl_config, "w") as f:
@@ -289,7 +280,6 @@ def _train_with_truefoundry(config_base: Path = Path("examples/"), **kwargs):
                 ml_repo=cfg.mlfoundry_ml_repo,
                 run_name=cfg.mlfoundry_run_name,
                 auto_end=False,
-                create_ml_repo=False,
             )
             log_model_to_mlfoundry(
                 run=run,

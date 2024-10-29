@@ -1,18 +1,17 @@
-FROM truefoundrycloud/jupyter:0.2.20-sudo
+FROM tfy.jfrog.io/tfy-images/jupyter:0.3.4-cu121-py3.11.10-sudo
 ENV TORCH_CUDA_ARCH_LIST="7.0 7.5 8.0 8.6 8.9 9.0+PTX"
 ENV DEBIAN_FRONTEND=noninteractive
 USER root
-RUN add-apt-repository ppa:flexiondotorg/nvtop -y && \
-    apt update && \
-    apt install -y --no-install-recommends git curl wget htop nvtop && \
+RUN apt update && \
+    apt install -y --no-install-recommends git curl wget && \
     wget https://developer.download.nvidia.com/compute/cuda/repos/ubuntu2004/x86_64/cuda-keyring_1.1-1_all.deb -O /tmp/cuda-keyring_1.1-1_all.deb && \
     dpkg -i /tmp/cuda-keyring_1.1-1_all.deb && \
     apt update && \
-    apt install -y --no-install-recommends cuda-toolkit-12-1 libcudnn8=8.9.7.29-1+cuda12.2 libcudnn8-dev=8.9.7.29-1+cuda12.2 libnccl2 libnccl-dev
+    apt install -y --no-install-recommends libnccl2 libnccl-dev
 USER jovyan
 COPY requirements.txt notebook-requirements.txt /tmp/llm-finetune/
 RUN pip install -U pip wheel setuptools && \
-    pip uninstall -y mlflow axolotl && \
+    pip uninstall -y axolotl && \
     pip install --no-cache-dir -U -r /tmp/llm-finetune/notebook-requirements.txt
 USER root
 RUN mkdir -p /packages && \
@@ -21,9 +20,9 @@ USER jovyan
 RUN cd /packages && \
     git clone https://github.com/truefoundry/axolotl && \
     cd axolotl/ && \
-    git checkout 294e9097e2c4ea642198aea5ad0561d3b647e572
+    git checkout 8c3a727f9d60ffd3af385f90bcc3fa3a56398fe1
 RUN cd /packages/axolotl/ && \
-    MAX_JOBS=1 NVCC_APPEND_FLAGS="--threads 1" pip install -U --no-build-isolation -e .[flash-attn,mamba-ssm,fused-dense-lib,optimizers] && \
-    pip install --no-cache-dir -U -r /tmp/llm-finetune/notebook-requirements.txt
+    MAX_JOBS=1 NVCC_APPEND_FLAGS="--threads 1" pip install -U --no-build-isolation -e .[flash-attn,mamba-ssm,fused-dense-lib,optimizers,lion-pytorch,galore] -r /tmp/llm-finetune/notebook-requirements.txt && \
+    rm -rf /root/.cache/pip
 COPY --chown=jovyan:users . /tmp_home/jovyan/llm-finetune/
 ENV JUPYTER_APP_LAUNCHER_PATH=/home/jovyan/llm-finetune/.jp_app_launcher/

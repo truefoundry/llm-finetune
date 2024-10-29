@@ -61,7 +61,12 @@ def _make_dataset_file_source(
             "field_messages": "messages",
             "message_field_role": "role",
             "message_field_content": "content",
-            "roles": {"system": ["system"], "user": ["user", "human"], "assistant": ["assistant"], "tool": ["tool"]},
+            "roles": {
+                "system": ["system"],
+                "user": ["user", "human"],
+                "assistant": ["assistant"],
+                "tool": ["tool"],
+            },
             "split": split,
             "roles_to_train": ["gpt", "assistant", "ipython"],
             "train_on_eos": "last",
@@ -99,27 +104,3 @@ def dataset_uri_to_axolotl_datasources(
         return datasources
     else:
         raise ValueError(f"Unsupported data uri or path does not exist: {uri}")
-
-
-# --- Reference Notes ---
-
-
-# Other axolotl strategies:
-#     # Llama 2 chat template with data that looks like
-#     {"conversations": [{"role": "system", "content": "You are a helpful assistant"}, {"role": "user", "content": "hi"}, {"role": "assistant", "content": "hello"}]}
-
-#     Config:
-#     {
-#         "type": "sharegpt",
-#         "conversation": "llama-2",
-#         "field_human": "user",
-#         "field_model": "assistant",
-#     }
-
-#     # HF Tokenizers Chat Template
-#     {"conversations": [{"role": "system", "content": "You are a helpful assistant"}, {"role": "user", "content": "hi"}, {"role": "assistant", "content": "hello"}]}
-
-#     {
-#         "type": "chat_template",
-#         "chat_template": "chatml",
-#     }

@@ -1,18 +1,17 @@
-# https://hub.docker.com/layers/winglian/axolotl/main-20240819-py3.11-cu121-2.3.1/images/sha256-eb331da0d83e0e55301c542852ee4939d36fa02810f57d99b15f56e4dc0e200d?context=explore
-FROM winglian/axolotl@sha256:e70e7ea55ab3ae3c212066bf45271f49198445ab646b9d470d9e0f41050ac8c9
+# https://hub.docker.com/layers/winglian/axolotl/main-py3.11-cu121-2.3.1/images/sha256-3cc7799257eb808b819e1170c5781a4e5fe4a457687242d1f36d25fc9d3e98e0?context=explore
+FROM winglian/axolotl@sha256:0bdfe3f9b0b4be55a2f74748eff85a16c63558d2cd4c2d4bbbe9081da1ec5640
 USER root
 COPY requirements.txt /tmp/
 RUN pip install -U pip wheel setuptools && \
-    pip uninstall -y mlflow axolotl && \
+    pip uninstall -y axolotl && \
     pip install --no-cache-dir -U -r /tmp/requirements.txt
 RUN mkdir -p /packages && \
     cd /packages && \
     git clone https://github.com/truefoundry/axolotl && \
     cd axolotl/ && \
-    git checkout 294e9097e2c4ea642198aea5ad0561d3b647e572
+    git checkout 8c3a727f9d60ffd3af385f90bcc3fa3a56398fe1
 RUN cd /packages/axolotl/ && \
-    MAX_JOBS=1 NVCC_APPEND_FLAGS="--threads 1" pip install -U --no-build-isolation -e .[flash-attn,mamba-ssm,fused-dense-lib,optimizers] && \
-    pip install --no-cache-dir -U -r /tmp/requirements.txt && \
+    MAX_JOBS=1 NVCC_APPEND_FLAGS="--threads 1" pip install -U --no-build-isolation -e .[flash-attn,mamba-ssm,fused-dense-lib,optimizers,lion-pytorch,galore] -r /tmp/requirements.txt && \
     rm -rf /root/.cache/pip
 WORKDIR /app
 COPY . /app

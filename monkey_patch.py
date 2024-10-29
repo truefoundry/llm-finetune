@@ -12,6 +12,9 @@ from utils import ExtraMetricsCallback
 logger = logging.getLogger("axolotl")
 
 
+# TODO (chiragjn): >>> Rewrite this to use new plugins system
+
+
 def patched_validate_config(cfg, capabilities: Optional[dict] = None):
     from axolotl.utils.config.models.input.v0_4_1 import (
         AxolotlConfigWCapabilities,
@@ -61,7 +64,6 @@ def patched_pretrain_hooks(cfg, trainer):
             ml_repo=cfg.mlfoundry_ml_repo,
             run_name=cfg.mlfoundry_run_name,
             auto_end=False,
-            create_ml_repo=False,
         )
         mlfoundry_cb = MLFoundryCallback(
             run=run,

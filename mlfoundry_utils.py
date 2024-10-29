@@ -39,7 +39,10 @@ def is_mlfoundry_artifact(value: str):
 
 
 def download_mlfoundry_artifact(
-    artifact_version_fqn: str, download_dir: str, overwrite: bool = False, move_to: Optional[str] = None
+    artifact_version_fqn: str,
+    download_dir: str,
+    overwrite: bool = False,
+    move_to: Optional[str] = None,
 ):
     client = mlfoundry.get_client()
     artifact_version = client.get_artifact_version_by_fqn(artifact_version_fqn)
@@ -202,7 +205,11 @@ class MLFoundryCallback(TrainerCallback):
 
 
 def sanitize_name(value):
-    return re.sub(rf"[{re.escape(string.punctuation)}]+", "-", value.encode("ascii", "ignore").decode("utf-8"))
+    return re.sub(
+        rf"[{re.escape(string.punctuation)}]+",
+        "-",
+        value.encode("ascii", "ignore").decode("utf-8"),
+    )
 
 
 def generate_run_name(model_id, seed: Optional[int] = None):
@@ -215,14 +222,14 @@ def generate_run_name(model_id, seed: Optional[int] = None):
     return run_name
 
 
-def get_or_create_run(ml_repo: str, run_name: str, auto_end: bool = False, create_ml_repo: bool = False):
+def get_or_create_run(ml_repo: str, run_name: str, auto_end: bool = False):
+    from truefoundry.ml.autogen.client.exceptions import ResourceDoesNotExist
+
     client = mlfoundry.get_client()
-    if create_ml_repo:
-        client.create_ml_repo(ml_repo=ml_repo)
     try:
         run = client.get_run_by_name(ml_repo=ml_repo, run_name=run_name)
     except Exception as e:
-        if "RESOURCE_DOES_NOT_EXIST" not in str(e):
+        if not isinstance(e, ResourceDoesNotExist):
             raise
         run = client.create_run(ml_repo=ml_repo, run_name=run_name, auto_end=auto_end)
     return run
