@@ -184,7 +184,7 @@ class TrueFoundryMLPlugin(BasePlugin):
     def add_callbacks_post_trainer(self, cfg: TruefoundryMLPluginArgs, trainer: Trainer) -> List[TrainerCallback]:
         # Note: `cfg` is not really an instance of `TruefoundryMLPluginArgs` but a `DictDefault` object
         if not is_main_process():
-            return
+            return []
         logger.info(f"Config: {cfg}")
         truefoundry_ml_cb = None
         if cfg.truefoundry_ml_enable_reporting is True:

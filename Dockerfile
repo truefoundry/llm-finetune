@@ -9,9 +9,10 @@ RUN mkdir -p /packages && \
     cd /packages && \
     git clone https://github.com/truefoundry/axolotl && \
     cd axolotl/ && \
-    git checkout e5e91abc10b9aa1cc240329ddfa83c94c48fb595
+    git checkout 930e1d3e3fa38852dc5ee7d46f33a11070934f10
 RUN cd /packages/axolotl/ && \
-    MAX_JOBS=1 NVCC_APPEND_FLAGS="--threads 1" pip install -U --no-build-isolation --no-cache-dir -e .[flash-attn,mamba-ssm,fused-dense-lib,optimizers,lion-pytorch,galore] -r /tmp/requirements.txt && \
+    MAX_JOBS=1 NVCC_APPEND_FLAGS="--threads 1" pip install -U --no-build-isolation --no-cache-dir -e .[flash-attn,mamba-ssm,fused-dense-lib,optimizers,lion-pytorch,galore] && \
+    pip install --no-cache-dir -U -r /tmp/requirements.txt && \
     rm -rf /root/.cache/pip
 COPY plugins/axolotl_truefoundry /packages/axolotl_truefoundry
 RUN cd /packages/axolotl_truefoundry/ && \

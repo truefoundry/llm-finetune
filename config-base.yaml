@@ -50,7 +50,7 @@ base_model_ignore_patterns:
   - '*.ot'
   - '*.tflite'
   - '*.msgpack'
-chat_template: tokenizer_default
+chat_template: tokenizer_default_fallback_chatml
 dataset_prepared_path: ./outputs/data/last_run_prepared
 dataset_processes: 1
 ddp_timeout: 21600
@@ -80,7 +80,7 @@ low_cpu_mem_usage: True
 lr_scheduler: cosine
 max_grad_norm: 1.0
 mean_resizing_embeddings: True
-multipack_real_batches: True
+multipack_real_batches: False
 num_epochs: 10
 optimizer: adamw_torch_fused
 output_dir: ./outputs
