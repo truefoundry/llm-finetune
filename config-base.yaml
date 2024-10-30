@@ -86,7 +86,8 @@ optimizer: adamw_torch_fused
 output_dir: ./outputs
 plugins:
   - axolotl_truefoundry.TrueFoundryMLPlugin
-  - axolotl.integrations.liger.LigerPlugin
+  # Liger is disabled till it is updated with Gradient Accumulation Loss fixes
+  # - axolotl.integrations.liger.LigerPlugin
 pad_to_sequence_len: True
 remove_unused_columns: True
 report_to: tensorboard
