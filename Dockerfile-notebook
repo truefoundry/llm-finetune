@@ -20,14 +20,14 @@ USER jovyan
 RUN cd /packages && \
     git clone https://github.com/truefoundry/axolotl && \
     cd axolotl/ && \
-    git checkout 930e1d3e3fa38852dc5ee7d46f33a11070934f10
+    git checkout 811833d0f8ae2123dbe1a0aeb9647f6de36a77ab
 RUN cd /packages/axolotl/ && \
     MAX_JOBS=1 NVCC_APPEND_FLAGS="--threads 1" pip install -U --no-build-isolation --no-cache-dir -e .[flash-attn,mamba-ssm,fused-dense-lib,optimizers,lion-pytorch,galore] && \
     pip install --no-cache-dir -U -r /tmp/llm-finetune/notebook-requirements.txt && \
     rm -rf /root/.cache/pip
 COPY plugins/axolotl_truefoundry /packages/axolotl_truefoundry
 RUN cd /packages/axolotl_truefoundry/ && \
-    pip install -e --no-cache-dir . && \
+    pip install --no-cache-dir -e . && \
     rm -rf /root/.cache/pip
 COPY --chown=jovyan:users . /tmp_home/jovyan/llm-finetune/
 ENV JUPYTER_APP_LAUNCHER_PATH=/home/jovyan/llm-finetune/.jp_app_launcher/
