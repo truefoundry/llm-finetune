@@ -9,7 +9,7 @@ description = "TrueFoundry plugin for Axolotl"
 requires-python = ">=3.8.1,<4.0"
 dependencies = [
     "transformers>=4.0.0,<5",
-    "truefoundry==0.4.4rc10",
+    "truefoundry==0.4.4",
     "pynvml>=11.0.0,<12",
     "torch>=2.3.0,<3",
     "pydantic>=2.0.0,<3",

@@ -168,6 +168,7 @@ class TruefoundryMLPluginArgs(BaseModel):
     val_data_uri: Optional[str] = None
     val_set_size: float = 0.1
     dataset_type: DatasetType = DatasetType.chat
+    drop_long_sequences: bool = True
     truefoundry_ml_enable_reporting: bool = False
     truefoundry_ml_repo: Optional[str] = None
     truefoundry_ml_run_name: Optional[str] = None
