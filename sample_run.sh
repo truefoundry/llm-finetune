@@ -31,12 +31,12 @@ accelerate launch \
 train.py \
 config-base.yaml \
 --deepspeed ./deepspeed_configs/3_ds_z2_config.json \
---base_model meta-llama/Llama-3.2-1B-Instruct \
---train_data_uri ./sample_data/chatalpaca-openai-100.jsonl \
+--base_model HuggingFaceTB/SmolLM2-135M-Instruct \
+--train_data_uri ./sample_data/chatalpaca-openai-1k.jsonl \
 --val_data_uri None \
 --val_set_size 0.2 \
 --dataset_type chat \
---sequence_len 4096 \
+--sequence_len 2048 \
 --max_steps 0 \
 --micro_batch_size 2 \
 --eval_batch_size 2 \
@@ -53,11 +53,12 @@ config-base.yaml \
 --eval_steps 0.2 \
 --adapter qlora \
 --lora_target_linear True \
---lora_r 128 \
---lora_alpha 256 \
+--lora_r 64 \
+--lora_alpha 128 \
 --truefoundry_ml_enable_reporting $TRUEFOUNDRY_ML_ENABLE_REPORTING \
 --truefoundry_ml_repo $TRUEFOUNDRY_ML_REPO \
 --truefoundry_ml_run_name $TRUEFOUNDRY_ML_RUN_NAME \
 --truefoundry_ml_log_checkpoints True \
 --resume_from_checkpoint False \
---cleanup_output_dir_on_start $CLEANUP_OUTPUT_DIR_ON_START
+--cleanup_output_dir_on_start $CLEANUP_OUTPUT_DIR_ON_START \
+--pad_to_sequence_len True

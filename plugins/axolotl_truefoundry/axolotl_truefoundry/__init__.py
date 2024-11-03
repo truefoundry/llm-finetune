@@ -10,7 +10,7 @@ import torch
 from axolotl.integrations.base import BasePlugin
 from axolotl.utils.callbacks import GPUStatsCallback
 from axolotl.utils.distributed import is_main_process
-from pydantic import BaseModel
+from pydantic import BaseModel, ConfigDict
 from transformers import Trainer, TrainerCallback
 from transformers.integrations import rewrite_logs
 from transformers.integrations.integration_utils import TensorBoardCallback
@@ -163,17 +163,28 @@ class DatasetType(str, enum.Enum):
     chat = "chat"
 
 
+class LongSequenceStrategy(str, enum.Enum):
+    error = "error"
+    drop = "drop"
+    truncate = "truncate"
+
+
 class TruefoundryMLPluginArgs(BaseModel):
+    model_config = ConfigDict(use_enum_values=True)
+
+    dataset_type: DatasetType = DatasetType.chat
     train_data_uri: Optional[str]
     val_data_uri: Optional[str] = None
     val_set_size: float = 0.1
-    dataset_type: DatasetType = DatasetType.chat
-    drop_long_sequences: bool = True
+
+    long_sequences_strategy: LongSequenceStrategy = LongSequenceStrategy.error
+
     truefoundry_ml_enable_reporting: bool = False
     truefoundry_ml_repo: Optional[str] = None
     truefoundry_ml_run_name: Optional[str] = None
     truefoundry_ml_log_checkpoints: bool = True
     truefoundry_ml_checkpoint_artifact_name: Optional[str] = None
+
     cleanup_output_dir_on_start: bool = False
     logging_dir: str = "./tensorboard_logs"
 
