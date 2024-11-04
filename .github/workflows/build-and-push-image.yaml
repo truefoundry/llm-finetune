@@ -4,6 +4,8 @@ on:
   push:
     tags:
       - v*
+    branches:
+      - update-workflow
 
 permissions:
   id-token: write
@@ -33,9 +35,6 @@ jobs:
           docker-images: false
           swap-storage: false
 
-      - name: Checkout
-        uses: actions/checkout@v3
-
       - name: Set version tags
         run: |
           echo "Ref name is ${{ github.ref_name }}"
@@ -51,45 +50,21 @@ jobs:
           echo "Setting ALT_VERSION_TAG equal to $ALT_VERSION_TAG"
           echo "ALT_VERSION_TAG=$ALT_VERSION_TAG" >> $GITHUB_ENV
 
-      - name: Configure AWS credentials
-        uses: aws-actions/configure-aws-credentials@v4
+
+      - name: Build and Push llm-finetune image
+        uses: truefoundry/workflows/.github/workflows/build.yml@v0.1.0
         with:
-          role-to-assume: ${{ secrets.PUBLIC_ECR_IAM_ROLE_ARN }}
-          aws-region: us-east-1
-
-      - name: Login to Amazon ECR
-        id: login-ecr
-        uses: aws-actions/amazon-ecr-login@v2
-        with:
-          registry-type: public
-
-      - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@v3
-
-      - name: Set repo uri
-        env:
-          REGISTRY: ${{ steps.login-ecr.outputs.registry }}
-          REGISTRY_ALIAS: truefoundrycloud
-          REPOSITORY: llm-finetune
-        run: |
-          REPOSITORY_URI=${{ env.REGISTRY }}/${{ env.REGISTRY_ALIAS }}/${{ env.REPOSITORY }}
-          echo "Setting REPOSITORY_URI equal to $REPOSITORY_URI"
-          echo "REPOSITORY_URI=$REPOSITORY_URI" >> $GITHUB_ENV
-
-      - name: Build and push image
-        uses: docker/build-push-action@v5
-        env:
-          IMAGE_TAG_1: ${{ env.REPOSITORY_URI }}:${{ env.GITHUB_SHA }}
-          IMAGE_TAG_2: ${{ env.REPOSITORY_URI }}:${{ env.VERSION_TAG }}
-          IMAGE_TAG_3: ${{ env.REPOSITORY_URI }}:${{ env.ALT_VERSION_TAG }}
-        with:
-          context: .
-          file: Dockerfile
+          image_tag: ${{ github.sha }}
+          extra_image_tag: |
+            ${{ env.VERSION_TAG }}
+            ${{ env.ALT_VERSION_TAG }}
           platforms: linux/amd64
-          push: true
-          tags: ${{ env.IMAGE_TAG_1 }},${{ env.IMAGE_TAG_2 }},${{ env.IMAGE_TAG_3 }}
-          cache-from: type=registry,ref=${{ env.REPOSITORY_URI }}:buildcache
-          cache-to: mode=max,image-manifest=true,type=registry,ref=${{ env.REPOSITORY_URI }}:buildcache
+          image_artifact_name: ${{ github.event.repository.name }}
+          artifactory_registry_url: ${{ vars.TRUEFOUNDRY_ARTIFACTORY_REGISTRY_URL }}
+          artifactory_repository_url: ${{ vars.TRUEFOUNDRY_ARTIFACTORY_PUBLIC_REPOSITORY }}
+        secrets:
+          artifactory_username: ${{ secrets.TRUEFOUNDRY_ARTIFACTORY_PUBLIC_USERNAME }}
+          artifactory_password: ${{ secrets.TRUEFOUNDRY_ARTIFACTORY_PUBLIC_PASSWORD }}
 
   build_notebook_image:
     name: Build Notebook Image
@@ -106,9 +81,6 @@ jobs:
           docker-images: false
           swap-storage: false
 
-      - name: Checkout
-        uses: actions/checkout@v3
-
       - name: Set version tags
         run: |
           echo "Ref name is ${{ github.ref_name }}"
@@ -120,40 +92,14 @@ jobs:
           echo "Setting VERSION_TAG equal to $VERSION_TAG"
           echo "VERSION_TAG=$VERSION_TAG" >> $GITHUB_ENV
 
-      - name: Configure AWS credentials
-        uses: aws-actions/configure-aws-credentials@v4
+      - name: Build and Push jupyter image
+        uses: truefoundry/workflows/.github/workflows/build.yml@v0.1.0
         with:
-          role-to-assume: ${{ secrets.PUBLIC_ECR_IAM_ROLE_ARN }}
-          aws-region: us-east-1
-
-      - name: Login to Amazon ECR
-        id: login-ecr
-        uses: aws-actions/amazon-ecr-login@v2
-        with:
-          registry-type: public
-
-      - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@v3
-
-      - name: Set repo uri
-        env:
-          REGISTRY: ${{ steps.login-ecr.outputs.registry }}
-          REGISTRY_ALIAS: truefoundrycloud
-          REPOSITORY: llm-finetune
-        run: |
-          REPOSITORY_URI=${{ env.REGISTRY }}/${{ env.REGISTRY_ALIAS }}/${{ env.REPOSITORY }}
-          echo "Setting REPOSITORY_URI equal to $REPOSITORY_URI"
-          echo "REPOSITORY_URI=$REPOSITORY_URI" >> $GITHUB_ENV
-
-      - name: Build and push image
-        uses: docker/build-push-action@v5
-        env:
-          IMAGE_TAG_1: ${{ env.REPOSITORY_URI }}:${{ env.VERSION_TAG }}
-        with:
-          context: .
-          file: Dockerfile-notebook
+          image_tag: ${{ env.VERSION_TAG }}
           platforms: linux/amd64
-          push: true
-          tags: ${{ env.IMAGE_TAG_1 }}
-          cache-from: type=registry,ref=${{ env.REPOSITORY_URI }}:jupyter-buildcache
-          cache-to: mode=max,image-manifest=true,type=registry,ref=${{ env.REPOSITORY_URI }}:jupyter-buildcache
+          image_artifact_name: ${{ github.event.repository.name }}
+          artifactory_registry_url: ${{ vars.TRUEFOUNDRY_ARTIFACTORY_REGISTRY_URL }}
+          artifactory_repository_url: ${{ vars.TRUEFOUNDRY_ARTIFACTORY_PUBLIC_REPOSITORY }}
+        secrets:
+          artifactory_username: ${{ secrets.TRUEFOUNDRY_ARTIFACTORY_PUBLIC_USERNAME }}
+          artifactory_password: ${{ secrets.TRUEFOUNDRY_ARTIFACTORY_PUBLIC_PASSWORD }}
