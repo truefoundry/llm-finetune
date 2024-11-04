@@ -2,7 +2,6 @@ import contextlib
 import gc
 import json
 import logging
-import math
 import os
 import tempfile
 import time
@@ -11,7 +10,6 @@ from typing import Optional
 import pynvml
 import torch
 from pydantic.v1 import BaseModel
-from transformers import TrainerCallback
 
 logger = logging.getLogger("axolotl")
 
@@ -33,33 +31,6 @@ def get_gpu_metrics():
         pass
 
     return metrics
-
-
-class ExtraMetricsCallback(TrainerCallback):
-    def _add_perplexity(self, logs):
-        for loss_key, perplexity_key in [
-            ("loss", "train_perplexity"),
-            ("eval_loss", "eval_perplexity"),
-        ]:
-            if loss_key in logs:
-                try:
-                    perplexity = math.exp(logs[loss_key])
-                except OverflowError:
-                    perplexity = float("inf")
-                    logger.warning(f"Encountered inf in eval perplexity, cannot log it as a metric")
-                logger.info(f"{perplexity_key}: {perplexity}")
-                logs[perplexity_key] = perplexity
-
-    # noinspection PyMethodOverriding
-    def on_log(self, args, state, control, logs, model=None, **kwargs):
-        # TODO (chiragjn): Hack for now, needs to be moved to `compute_metrics`
-        #   unfortunately compute metrics does not give us already computed metrics like eval_loss
-        if not state.is_world_process_zero:
-            return
-
-        self._add_perplexity(logs)
-        logs.update(get_gpu_metrics())
-        logger.info(f"Metrics: {logs}")
 
 
 def try_cleanup_gpus(n_iters=6, interval_seconds=10):

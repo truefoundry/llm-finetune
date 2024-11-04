@@ -16,3 +16,4 @@ tensorboard_logs/
 mlruns/
 output/
 outputs/
+*.egg-info/

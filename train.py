@@ -1,6 +1,7 @@
-from monkey_patch import monkey_patch_axolotl_internals
+import axolotl.logging_config
 
-monkey_patch_axolotl_internals()
+axolotl.logging_config.configure_logging()
+
 
 import logging
 import os
@@ -16,7 +17,6 @@ from axolotl.utils.dict import DictDefault
 from axolotl.utils.distributed import barrier, is_main_process, zero_first
 from axolotl.utils.models import load_tokenizer
 from rich import console, panel
-from transformers import AutoConfig
 from transformers.utils import is_torch_bf16_gpu_available, is_torch_tf32_available
 
 from checkpoint_utils import (
@@ -53,17 +53,6 @@ DEFAULT_PAD_TOKEN = "<pad>"
 DEFAULT_EOS_TOKEN = "</s>"
 DEFAULT_BOS_TOKEN = "<s>"
 DEFAULT_UNK_TOKEN = "<unk>"
-MODEL_TYPE_TO_CHAT_TEMPLATE = {
-    "llama": "llama3",
-    "gemma": "gemma",
-    "cohere": "cohere",
-    "phi3": "phi_3",
-    "phi_3": "phi_3",
-    "phi": "phi_3",
-    "mistral": "mistral",
-    "mixtral": "mistral",
-    None: "chatml",
-}
 LOCAL_RANK = int(os.environ.get("LOCAL_RANK", 0))
 
 
@@ -100,8 +89,6 @@ def make_axolotl_config(config_base, kwargs, timestamp=None):
             if os.path.exists(cfg.output_dir):
                 shutil.rmtree(cfg.output_dir)
 
-    model_hf_config = AutoConfig.from_pretrained(cfg.base_model, trust_remote_code=True)
-
     data_dir = os.path.join(os.path.abspath(cfg.output_dir), "data")
     set_cfg_option_if_auto(cfg, "data_dir", data_dir)
     cfg.output_dir = os.path.join(os.path.abspath(cfg.output_dir), "model")
@@ -116,29 +103,32 @@ def make_axolotl_config(config_base, kwargs, timestamp=None):
         os.makedirs(cfg.output_dir, exist_ok=True)
 
         run = None
-        if cfg.mlfoundry_enable_reporting is True:
+        if cfg.truefoundry_ml_enable_reporting is True:
             if TFY_INTERNAL_JOB_RUN_NAME:
                 fallback_run_name = f"finetune-{sanitize_name(TFY_INTERNAL_JOB_RUN_NAME)}"
             else:
                 fallback_run_name = f"finetune-{timestamp}"
-            set_cfg_option_if_auto(cfg, "mlfoundry_run_name", fallback_run_name)
+            set_cfg_option_if_auto(cfg, "truefoundry_ml_run_name", fallback_run_name)
 
             run = get_or_create_run(
-                ml_repo=cfg.mlfoundry_ml_repo,
-                run_name=cfg.mlfoundry_run_name,
+                ml_repo=cfg.truefoundry_ml_repo,
+                run_name=cfg.truefoundry_ml_run_name,
                 auto_end=False,
-                create_ml_repo=False,
             )
 
-            if cfg.mlfoundry_log_checkpoints is True:
+            if cfg.truefoundry_ml_log_checkpoints is True:
                 if TFY_INTERNAL_JOB_RUN_NAME:
-                    mlfoundry_checkpoint_artifact_name = f"ckpt-{sanitize_name(TFY_INTERNAL_JOB_RUN_NAME)}"
+                    truefoundry_ml_checkpoint_artifact_name = f"ckpt-{sanitize_name(TFY_INTERNAL_JOB_RUN_NAME)}"
                 else:
-                    mlfoundry_checkpoint_artifact_name = f"ckpt-{run.run_name}"
-                set_cfg_option_if_auto(cfg, "mlfoundry_checkpoint_artifact_name", mlfoundry_checkpoint_artifact_name)
+                    truefoundry_ml_checkpoint_artifact_name = f"ckpt-{run.run_name}"
+                set_cfg_option_if_auto(
+                    cfg,
+                    "truefoundry_ml_checkpoint_artifact_name",
+                    truefoundry_ml_checkpoint_artifact_name,
+                )
             else:
-                cfg.mlfoundry_log_checkpoints = False
-                cfg.mlfoundry_checkpoint_artifact_name = None
+                cfg.truefoundry_ml_log_checkpoints = False
+                cfg.truefoundry_ml_checkpoint_artifact_name = None
 
         if cfg.resume_from_checkpoint == "auto":
             resume_from_checkpoint = True
@@ -147,16 +137,19 @@ def make_axolotl_config(config_base, kwargs, timestamp=None):
         last_checkpoint_dir = get_last_checkpoint_for_resume_if_any(
             output_dir=cfg.output_dir,
             resume_from_checkpoint=resume_from_checkpoint,
-            mlfoundry_enable_reporting=cfg.mlfoundry_enable_reporting,
-            mlfoundry_ml_repo=cfg.mlfoundry_ml_repo,
-            mlfoundry_checkpoint_artifact_name=cfg.mlfoundry_checkpoint_artifact_name,
+            mlfoundry_enable_reporting=cfg.truefoundry_ml_enable_reporting,
+            mlfoundry_ml_repo=cfg.truefoundry_ml_repo,
+            mlfoundry_checkpoint_artifact_name=cfg.truefoundry_ml_checkpoint_artifact_name,
         )
         cfg.resume_from_checkpoint = last_checkpoint_dir
 
         set_cfg_option_if_auto(cfg, "eval_steps", 0.1)
         set_cfg_option_if_auto(cfg, "save_steps", 0.1)
 
-        is_ampere_or_newer = torch.cuda.get_device_capability(device=LOCAL_RANK) >= (8, 0)
+        is_ampere_or_newer = torch.cuda.get_device_capability(device=LOCAL_RANK) >= (
+            8,
+            0,
+        )
         is_tf32_supported = is_ampere_or_newer and is_torch_tf32_available()
         is_bf16_supported = is_ampere_or_newer and is_torch_bf16_gpu_available()
         set_cfg_option_if_auto(cfg, "tf32", is_tf32_supported)
@@ -181,11 +174,6 @@ def make_axolotl_config(config_base, kwargs, timestamp=None):
         set_cfg_option_if_auto(cfg, "unsloth_lora_o", use_unsloth)
         set_cfg_option_if_auto(cfg, "unsloth_rms_norm", use_unsloth)
         set_cfg_option_if_auto(cfg, "unsloth_rope", use_unsloth)
-
-        if cfg.chat_template == "auto":
-            model_type = getattr(model_hf_config, "model_type", None)
-            chat_template = "tokenizer_default_fallback_" + MODEL_TYPE_TO_CHAT_TEMPLATE.get(model_type, "chatml")
-            set_cfg_option_if_auto(cfg, "chat_template", chat_template)
 
         if cfg.datasets == "auto":
             if not cfg.train_data_uri:
@@ -226,7 +214,8 @@ def make_axolotl_config(config_base, kwargs, timestamp=None):
         logger.info(f"Prepared config: {cfg}")
         # This hack is needed because yaml dump refuses to treat DictDefault as dict
         yaml.add_representer(
-            DictDefault, lambda dumper, data: dumper.represent_mapping("tag:yaml.org,2002:map", data.items())
+            DictDefault,
+            lambda dumper, data: dumper.represent_mapping("tag:yaml.org,2002:map", data.items()),
         )
         print(f"Saving axolotl config to {axolotl_config}")
         with open(axolotl_config, "w") as f:
@@ -281,15 +270,14 @@ def _train_with_truefoundry(config_base: Path = Path("examples/"), **kwargs):
             if os.path.exists(readme_path):
                 shutil.copy2(readme_path, os.path.join(model_dir, "README.md"))
             logger.info(f"Merged model has been saved to {model_dir}")
-        if cfg.mlfoundry_enable_reporting is True:
+        if cfg.truefoundry_ml_enable_reporting is True:
             *_, model_name = cfg.base_model.rsplit("/", 1)
             model_name = "-".join(["finetuned", model_name, timestamp])
             model_name = sanitize_name(model_name)
             run = get_or_create_run(
-                ml_repo=cfg.mlfoundry_ml_repo,
-                run_name=cfg.mlfoundry_run_name,
+                ml_repo=cfg.truefoundry_ml_repo,
+                run_name=cfg.truefoundry_ml_run_name,
                 auto_end=False,
-                create_ml_repo=False,
             )
             log_model_to_mlfoundry(
                 run=run,
