@@ -2,6 +2,8 @@ FROM tfy.jfrog.io/tfy-images/jupyter:0.3.4-cu121-py3.11.10-sudo
 SHELL ["/bin/bash", "-c"]
 ENV TORCH_CUDA_ARCH_LIST="7.0 7.5 8.0 8.6 8.9 9.0+PTX"
 ENV DEBIAN_FRONTEND=noninteractive
+
+# upgrade libnccl
 USER root
 RUN apt update && \
     apt install -y --no-install-recommends git curl wget && \
@@ -9,25 +11,33 @@ RUN apt update && \
     dpkg -i /tmp/cuda-keyring_1.1-1_all.deb && \
     apt update && \
     apt install -y --no-install-recommends --allow-change-held-packages libnccl2 libnccl-dev
+
+# Install torch
 USER jovyan
 COPY requirements.txt notebook-requirements.txt /tmp/llm-finetune/
 RUN pip install -U pip wheel setuptools && \
     pip uninstall -y axolotl && \
     pip install --no-cache-dir -U -r /tmp/llm-finetune/notebook-requirements.txt
+
+# Setup editable packages
 USER root
 RUN mkdir -p /packages && \
     chown -R jovyan:users /packages
+
+# Install axolotl
 USER jovyan
-RUN pip install -U pip setuptools wheel && \
-    cd /packages && \
+RUN cd /packages && \
     git clone https://github.com/truefoundry/axolotl && \
     cd axolotl/ && \
-    git checkout e16f637d079ef5d56321a240ef0547a50c37b708
-RUN cd /packages/axolotl/ && \
-    MAX_JOBS=1 NVCC_APPEND_FLAGS="--threads 1" pip install -U --no-build-isolation --no-cache-dir -e .[flash-attn,mamba-ssm,fused-dense-lib,optimizers,lion-pytorch,galore] && \
-    pip install --no-cache-dir -U -r /tmp/llm-finetune/notebook-requirements.txt
+    git checkout e16f637d079ef5d56321a240ef0547a50c37b708 && \
+    cd /packages/axolotl/ && \
+    MAX_JOBS=1 NVCC_APPEND_FLAGS="--threads 1" pip install -U --no-build-isolation --no-cache-dir -e .[flash-attn,mamba-ssm,fused-dense-lib,optimizers,lion-pytorch,galore]
+
+# Install axolotl_truefoundry plugin with our requirements overrides over axolotl
 COPY --chown=jovyan:users plugins/axolotl_truefoundry /packages/axolotl_truefoundry
 RUN cd /packages/axolotl_truefoundry/ && \
-    pip install --no-cache-dir -e .
+    pip install --no-cache-dir -U -r /tmp/llm-finetune/notebook-requirements.txt -e .
+
+# Add source code for finetuning
 COPY --chown=jovyan:users . /tmp_home/jovyan/llm-finetune/
 ENV JUPYTER_APP_LAUNCHER_PATH=/home/jovyan/llm-finetune/.jp_app_launcher/
