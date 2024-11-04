@@ -51,7 +51,7 @@ jobs:
   build_finetune_image:
     - name: Build and Push llm-finetune image
       needs: set_version_tags
-      uses: truefoundry/workflows/.github/workflows/build.yml@v0.1.1
+      uses: truefoundry/workflows/.github/workflows/build.yml@free-disk-space-input
       with:
         image_tag: ${{ github.sha }}
         extra_image_tag: |
@@ -68,7 +68,7 @@ jobs:
 
   build_jupyter_image:
     - name: Build and Push jupyter image
-      uses: truefoundry/workflows/.github/workflows/build.yml@v0.1.1
+      uses: truefoundry/workflows/.github/workflows/build.yml@free-disk-space-input
       with:
         image_tag: ${{ needs.set_version_tags.outputs.jupyter_version_tag }}
         platforms: linux/amd64
