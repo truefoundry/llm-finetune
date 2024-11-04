@@ -4,10 +4,10 @@ ENV DEBIAN_FRONTEND=noninteractive
 USER root
 RUN apt update && \
     apt install -y --no-install-recommends git curl wget && \
-    wget https://developer.download.nvidia.com/compute/cuda/repos/ubuntu2004/x86_64/cuda-keyring_1.1-1_all.deb -O /tmp/cuda-keyring_1.1-1_all.deb && \
+    wget https://developer.download.nvidia.com/compute/cuda/repos/ubuntu2204/x86_64/cuda-keyring_1.1-1_all.deb -O /tmp/cuda-keyring_1.1-1_all.deb && \
     dpkg -i /tmp/cuda-keyring_1.1-1_all.deb && \
     apt update && \
-    apt install -y --no-install-recommends libnccl2 libnccl-dev
+    apt install -y --no-install-recommends --allow-change-held-packages libnccl2 libnccl-dev
 USER jovyan
 COPY requirements.txt notebook-requirements.txt /tmp/llm-finetune/
 RUN pip install -U pip wheel setuptools && \
