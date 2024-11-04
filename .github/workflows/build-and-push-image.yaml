@@ -49,33 +49,33 @@ jobs:
           echo "alt_version_tag=$ALT_VERSION_TAG" >> $GITHUB_OUTPUT
 
   build_finetune_image:
-    - name: Build and Push llm-finetune image
-      needs: set_version_tags
-      uses: truefoundry/workflows/.github/workflows/build.yml@free-disk-space-input
-      with:
-        image_tag: ${{ github.sha }}
-        extra_image_tag: |
-          ${{ needs.set_version_tags.outputs.version_tag }}
-          ${{ needs.set_version_tags.outputs.alt_version_tag }}
-        platforms: linux/amd64
-        free_disk_space: true
-        image_artifact_name: ${{ github.event.repository.name }}
-        artifactory_registry_url: ${{ vars.TRUEFOUNDRY_ARTIFACTORY_REGISTRY_URL }}
-        artifactory_repository_url: ${{ vars.TRUEFOUNDRY_ARTIFACTORY_PUBLIC_REPOSITORY }}
-      secrets:
-        artifactory_username: ${{ secrets.TRUEFOUNDRY_ARTIFACTORY_PUBLIC_USERNAME }}
-        artifactory_password: ${{ secrets.TRUEFOUNDRY_ARTIFACTORY_PUBLIC_PASSWORD }}
+    name: Build and Push llm-finetune image
+    needs: set_version_tags
+    uses: truefoundry/workflows/.github/workflows/build.yml@free-disk-space-input
+    with:
+      image_tag: ${{ github.sha }}
+      extra_image_tag: |
+        ${{ needs.set_version_tags.outputs.version_tag }}
+        ${{ needs.set_version_tags.outputs.alt_version_tag }}
+      platforms: linux/amd64
+      free_disk_space: true
+      image_artifact_name: ${{ github.event.repository.name }}
+      artifactory_registry_url: ${{ vars.TRUEFOUNDRY_ARTIFACTORY_REGISTRY_URL }}
+      artifactory_repository_url: ${{ vars.TRUEFOUNDRY_ARTIFACTORY_PUBLIC_REPOSITORY }}
+    secrets:
+      artifactory_username: ${{ secrets.TRUEFOUNDRY_ARTIFACTORY_PUBLIC_USERNAME }}
+      artifactory_password: ${{ secrets.TRUEFOUNDRY_ARTIFACTORY_PUBLIC_PASSWORD }}
 
   build_jupyter_image:
-    - name: Build and Push jupyter image
-      uses: truefoundry/workflows/.github/workflows/build.yml@free-disk-space-input
-      with:
-        image_tag: ${{ needs.set_version_tags.outputs.jupyter_version_tag }}
-        platforms: linux/amd64
-        free_disk_space: true
-        image_artifact_name: ${{ github.event.repository.name }}
-        artifactory_registry_url: ${{ vars.TRUEFOUNDRY_ARTIFACTORY_REGISTRY_URL }}
-        artifactory_repository_url: ${{ vars.TRUEFOUNDRY_ARTIFACTORY_PUBLIC_REPOSITORY }}
-      secrets:
-        artifactory_username: ${{ secrets.TRUEFOUNDRY_ARTIFACTORY_PUBLIC_USERNAME }}
-        artifactory_password: ${{ secrets.TRUEFOUNDRY_ARTIFACTORY_PUBLIC_PASSWORD }}
+    name: Build and Push jupyter image
+    uses: truefoundry/workflows/.github/workflows/build.yml@free-disk-space-input
+    with:
+      image_tag: ${{ needs.set_version_tags.outputs.jupyter_version_tag }}
+      platforms: linux/amd64
+      free_disk_space: true
+      image_artifact_name: ${{ github.event.repository.name }}
+      artifactory_registry_url: ${{ vars.TRUEFOUNDRY_ARTIFACTORY_REGISTRY_URL }}
+      artifactory_repository_url: ${{ vars.TRUEFOUNDRY_ARTIFACTORY_PUBLIC_REPOSITORY }}
+    secrets:
+      artifactory_username: ${{ secrets.TRUEFOUNDRY_ARTIFACTORY_PUBLIC_USERNAME }}
+      artifactory_password: ${{ secrets.TRUEFOUNDRY_ARTIFACTORY_PUBLIC_PASSWORD }}
