@@ -1,8 +1,11 @@
 - title: Finetuning Notebook
   description: Launch Truefoundry LLM Finetuning Notebook
   icon: /home/jovyan/llm-finetune/assets/truefoundry-logo.svg
-  source: /llm-finetune/finetune.ipynb
-  type: notebook
   cwd: /home/jovyan/llm-finetune/
+  type: jupyterlab-commands
+  source:
+    - label: Finetuning Notebook
+      id: 'filebrowser:open-path'
+      args:
+        path: /llm-finetune/finetune.ipynb
   catalog: Notebook
-  copy: false
