@@ -55,13 +55,13 @@ def get_gpu_metrics():
 
 
 def get_or_create_run(ml_repo: str, run_name: str, auto_end: bool = False):
-    from truefoundry.ml.autogen.client.exceptions import ResourceDoesNotExist
+    from truefoundry.ml.autogen.client.exceptions import NotFoundException
 
     client = ml.get_client()
     try:
         run = client.get_run_by_name(ml_repo=ml_repo, run_name=run_name)
     except Exception as e:
-        if not isinstance(e, ResourceDoesNotExist):
+        if not isinstance(e, NotFoundException):
             raise
         run = client.create_run(ml_repo=ml_repo, run_name=run_name, auto_end=auto_end)
     return run
