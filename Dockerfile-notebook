@@ -27,7 +27,6 @@ RUN cd /packages/axolotl/ && \
     rm -rf /root/.cache/pip
 COPY plugins/axolotl_truefoundry /packages/axolotl_truefoundry
 RUN cd /packages/axolotl_truefoundry/ && \
-    pip install --no-cache-dir -e . && \
-    rm -rf /root/.cache/pip
+    pip install --no-cache-dir -e .
 COPY --chown=jovyan:users . /tmp_home/jovyan/llm-finetune/
 ENV JUPYTER_APP_LAUNCHER_PATH=/home/jovyan/llm-finetune/.jp_app_launcher/
