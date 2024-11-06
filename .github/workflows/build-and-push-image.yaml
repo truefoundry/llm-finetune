@@ -18,11 +18,39 @@ env:
   TAG_PREFIX: "v"
 
 jobs:
+  set_version_tags:
+    name: Set version tags
+    runs-on: ubuntu-latest
+    outputs:
+      version_tag: ${{ steps.set_version_tags.outputs.version_tag }}
+      alt_version_tag: ${{ steps.set_version_tags.outputs.alt_version_tag }}
+    steps:
+      - name: Set version tags
+        id: set_version_tags
+        run: |
+          echo "Ref name is ${{ github.ref_name }}"
+          echo "TAG_PREFIX is ${{ env.TAG_PREFIX }}"
+
+          REF_NAME=${{ github.ref_name }}
+          TAG_PREFIX=${{ env.TAG_PREFIX }}
+          VERSION_TAG=$(echo $REF_NAME | awk -F$TAG_PREFIX '{print $2}')
+          echo "Setting VERSION_TAG to $VERSION_TAG"
+          echo "version_tag=$VERSION_TAG" >> $GITHUB_OUTPUT
+
+          ALT_VERSION_TAG=$(echo $VERSION_TAG | awk -F- '{print $1}')-${GITHUB_SHA::7}
+          echo "Setting ALT_VERSION_TAG equal to $ALT_VERSION_TAG"
+          echo "alt_version_tag=$ALT_VERSION_TAG" >> $GITHUB_OUTPUT
+
   build_image:
-    name: Build
+    name: Build image
+    needs: set_version_tags
     uses: truefoundry/github-workflows-public/.github/workflows/build.yml@v0.1.2
     with:
-      image_tag: "v${{ github.sha }}"
+      image_tag: "${{ github.sha }}"
+      extra_image_tag: |
+        ${{ needs.set_version_tags.outputs.version_tag }}
+        ${{ needs.set_version_tags.outputs.alt_version_tag }}
+      platforms: linux/amd64
       image_artifact_name: llm-finetune
       artifactory_registry_url: ${{ vars.TRUEFOUNDRY_ARTIFACTORY_REGISTRY_URL }}
       artifactory_repository_url: ${{ vars.TRUEFOUNDRY_ARTIFACTORY_PUBLIC_REPOSITORY }}
@@ -32,11 +60,16 @@ jobs:
       artifactory_password: ${{ secrets.TRUEFOUNDRY_ARTIFACTORY_PUBLIC_PASSWORD }}
 
   build_notebook_image:
-    name: Build
+    name: Build notebook image
+    needs: set_version_tags
     uses: truefoundry/github-workflows-public/.github/workflows/build.yml@v0.1.2
     with:
-      image_tag: "v${{ github.sha }}"
-      image_artifact_name: llm-finetune-notebook
+      image_tag: "${{ github.sha }}"
+      extra_image_tag: |
+        ${{ needs.set_version_tags.outputs.version_tag }}
+        ${{ needs.set_version_tags.outputs.alt_version_tag }}
+      platforms: linux/amd64
+      image_artifact_name: llm-finetune-jupyter
       artifactory_registry_url: ${{ vars.TRUEFOUNDRY_ARTIFACTORY_REGISTRY_URL }}
       artifactory_repository_url: ${{ vars.TRUEFOUNDRY_ARTIFACTORY_PUBLIC_REPOSITORY }}
       dockerfile_path: Dockerfile-notebook
