@@ -1,7 +1,7 @@
 --extra-index-url https://download.pytorch.org/whl/cu121
 cloud-files==4.26.0
 deepspeed==0.15.3
-transformers @ git+https://github.com/huggingface/transformers@86701f2b6ff2085a3cd3ad1d30bc2ff2b10fbd94
+transformers==4.46.2
 pyarrow==15.0.0
 rich>=13.0.0,<14
 snowflake-connector-python[pandas]==3.12.3
