@@ -37,10 +37,6 @@ jobs:
           VERSION_TAG=$(echo $REF_NAME | awk -F$TAG_PREFIX '{print $2}')
           echo "Setting VERSION_TAG to $VERSION_TAG"
           echo "version_tag=$VERSION_TAG" >> $GITHUB_OUTPUT
-          
-          JUPYTER_VERSION_TAG=$(echo $REF_NAME | cut -d $TAG_PREFIX -f 2-)-jupyter
-          echo "Setting JUPYTER VERSION_TAG equal to JUPYTER_VERSION_TAG"
-          echo "jupyter_version_tag=JUPYTER_VERSION_TAG" >> $GITHUB_OUTPUT 
 
           ALT_VERSION_TAG=$(echo $VERSION_TAG | awk -F- '{print $1}')-${GITHUB_SHA::7}
           echo "Setting ALT_VERSION_TAG equal to $ALT_VERSION_TAG"
@@ -70,7 +66,7 @@ jobs:
       image_tag: "${{ github.sha }}"
       extra_image_tag: |
         ${{ needs.set_version_tags.outputs.version_tag }}
-        ${{ needs.set_version_tags.outputs.jupyter_version_tag }}
+        ${{ needs.set_version_tags.outputs.alt_version_tag }}
       platforms: linux/amd64
       image_artifact_name: llm-finetune-jupyter
       artifactory_registry_url: ${{ vars.TRUEFOUNDRY_ARTIFACTORY_REGISTRY_URL }}
