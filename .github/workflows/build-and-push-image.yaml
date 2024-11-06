@@ -23,7 +23,6 @@ jobs:
     runs-on: ubuntu-latest
     outputs:
       version_tag: ${{ steps.set_version_tags.outputs.version_tag }}
-      jupyter_version_tag: ${{ steps.set_version_tags.outputs.jupyter_version_tag }}
       alt_version_tag: ${{ steps.set_version_tags.outputs.alt_version_tag }}
     steps:
       - name: Set version tags
@@ -43,7 +42,8 @@ jobs:
           echo "alt_version_tag=$ALT_VERSION_TAG" >> $GITHUB_OUTPUT
 
   build_image:
-    name: Build
+    name: Build image
+    needs: set_version_tags
     uses: truefoundry/github-workflows-public/.github/workflows/build.yml@v0.1.2
     with:
       image_tag: "${{ github.sha }}"
@@ -60,7 +60,8 @@ jobs:
       artifactory_password: ${{ secrets.TRUEFOUNDRY_ARTIFACTORY_PUBLIC_PASSWORD }}
 
   build_notebook_image:
-    name: Build
+    name: Build notebook image
+    needs: set_version_tags
     uses: truefoundry/github-workflows-public/.github/workflows/build.yml@v0.1.2
     with:
       image_tag: "${{ github.sha }}"
