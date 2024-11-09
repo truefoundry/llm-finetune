@@ -86,8 +86,7 @@ optimizer: adamw_torch_fused
 output_dir: ./outputs
 plugins:
   - axolotl_truefoundry.TrueFoundryMLPlugin
-  # Liger is disabled till it is updated with Gradient Accumulation Loss fixes
-  # - axolotl.integrations.liger.LigerPlugin
+  - axolotl.integrations.liger.LigerPlugin
 pad_to_sequence_len: True
 remove_unused_columns: True
 report_to: tensorboard
@@ -127,6 +126,8 @@ truefoundry_ml_repo: null
 val_data_uri: null
 
 ## Liger
-liger_rms_norm: True
-liger_swiglu: True
-liger_fused_linear_cross_entropy: True
+liger_rope: true
+liger_rms_norm: true
+liger_glu_activation: true
+liger_layer_norm: true
+liger_fused_linear_cross_entropy: true

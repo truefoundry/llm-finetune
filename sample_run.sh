@@ -31,16 +31,16 @@ accelerate launch \
 train.py \
 config-base.yaml \
 --deepspeed ./deepspeed_configs/3_ds_z2_config.json \
---base_model HuggingFaceTB/SmolLM2-135M-Instruct \
+--base_model Qwen/Qwen2.5-7B-Instruct \
 --train_data_uri ./sample_data/chatalpaca-openai-1k.jsonl \
 --val_data_uri None \
 --val_set_size 0.2 \
 --dataset_type chat \
---sequence_len 2048 \
+--sequence_len 4096 \
 --max_steps 0 \
---micro_batch_size 2 \
---eval_batch_size 2 \
---num_epochs 3 \
+--micro_batch_size 1 \
+--eval_batch_size 1 \
+--num_epochs 5 \
 --gradient_accumulation_steps 4 \
 --gradient_checkpointing unsloth \
 --learning_rate 0.00001 \
