@@ -1,5 +1,5 @@
-# https://hub.docker.com/layers/winglian/axolotl/main-20241104-py3.11-cu121-2.3.1/images/sha256-790297fa1d71f8f1590c73ca4505ca39fe7dfa2886b2b6862199a6df679bf8e4?context=explore
-FROM winglian/axolotl@sha256:cffbcc4993e80301a8918062f8136a6ac402877fd6c29f1168be563e543aee4d
+# https://hub.docker.com/layers/winglian/axolotl/main-20241109-py3.11-cu121-2.3.1/images/sha256-73a9676288cced9762fd093e0c6325731a30b2c55ba9dc324beda67f3ab64612?context=explore
+FROM winglian/axolotl@sha256:21a1d9715d9cf3a6d3f37b253bcb1dc378b86b934dcdb25dc3967da57944f7ac
 SHELL ["/bin/bash", "-c"]
 USER root
 
