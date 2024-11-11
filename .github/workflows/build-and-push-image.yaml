@@ -44,7 +44,7 @@ jobs:
   build_image:
     name: Build image
     needs: set_version_tags
-    uses: truefoundry/github-workflows-public/.github/workflows/build.yml@v0.1.2
+    uses: truefoundry/github-workflows-public/.github/workflows/build.yml@v0.1.4
     with:
       image_tag: "${{ github.sha }}"
       extra_image_tag: |
@@ -55,6 +55,7 @@ jobs:
       artifactory_registry_url: ${{ vars.TRUEFOUNDRY_ARTIFACTORY_REGISTRY_URL }}
       artifactory_repository_url: ${{ vars.TRUEFOUNDRY_ARTIFACTORY_PUBLIC_REPOSITORY }}
       free_disk_space: true
+      enable_scan: false
     secrets:
       artifactory_username: ${{ secrets.TRUEFOUNDRY_ARTIFACTORY_PUBLIC_USERNAME }}
       artifactory_password: ${{ secrets.TRUEFOUNDRY_ARTIFACTORY_PUBLIC_PASSWORD }}
@@ -62,7 +63,7 @@ jobs:
   build_notebook_image:
     name: Build notebook image
     needs: set_version_tags
-    uses: truefoundry/github-workflows-public/.github/workflows/build.yml@v0.1.2
+    uses: truefoundry/github-workflows-public/.github/workflows/build.yml@v0.1.4
     with:
       image_tag: "${{ github.sha }}"
       extra_image_tag: |
@@ -74,6 +75,7 @@ jobs:
       artifactory_repository_url: ${{ vars.TRUEFOUNDRY_ARTIFACTORY_PUBLIC_REPOSITORY }}
       dockerfile_path: Dockerfile-notebook
       free_disk_space: true
+      enable_scan: false
     secrets:
       artifactory_username: ${{ secrets.TRUEFOUNDRY_ARTIFACTORY_PUBLIC_USERNAME }}
       artifactory_password: ${{ secrets.TRUEFOUNDRY_ARTIFACTORY_PUBLIC_PASSWORD }}
