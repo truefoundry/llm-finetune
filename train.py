@@ -270,7 +270,7 @@ def _train_with_truefoundry(config_base: Path = Path("examples/"), **kwargs):
             if os.path.exists(readme_path):
                 shutil.copy2(readme_path, os.path.join(model_dir, "README.md"))
             logger.info(f"Merged model has been saved to {model_dir}")
-        if cfg.truefoundry_ml_enable_reporting is True:
+        if cfg.truefoundry_ml_enable_reporting is True and cfg.truefoundry_ml_log_merged_model is True:
             *_, model_name = cfg.base_model.rsplit("/", 1)
             model_name = "-".join(["finetuned", model_name, timestamp])
             model_name = sanitize_name(model_name)

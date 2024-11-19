@@ -100,10 +100,12 @@ class TrueFoundryMLCallback(TrainerCallback):
         run: "MlFoundryRun",
         log_checkpoints: bool = True,
         checkpoint_artifact_name: Optional[str] = None,
+        log_gpu_metrics: bool = False,
     ):
         self._run = run
         self._checkpoint_artifact_name = checkpoint_artifact_name
         self._log_checkpoints = log_checkpoints
+        self._log_gpu_metrics = log_gpu_metrics
 
         if not self._checkpoint_artifact_name:
             logger.warning("checkpoint_artifact_name not passed. Checkpoints will not be logged to MLFoundry")
@@ -115,7 +117,7 @@ class TrueFoundryMLCallback(TrainerCallback):
 
         metrics = {}
         for k, v in logs.items():
-            if k.startswith("system/gpu"):
+            if k.startswith("system/gpu") and not self._log_gpu_metrics:
                 continue
             if isinstance(v, (int, float, np.integer, np.floating)) and math.isfinite(v):
                 metrics[k] = v
@@ -184,6 +186,8 @@ class TruefoundryMLPluginArgs(BaseModel):
     truefoundry_ml_run_name: Optional[str] = None
     truefoundry_ml_log_checkpoints: bool = True
     truefoundry_ml_checkpoint_artifact_name: Optional[str] = None
+    truefoundry_ml_log_merged_model: bool = True
+    truefoundry_ml_log_gpu_metrics: bool = False
 
     cleanup_output_dir_on_start: bool = False
     logging_dir: str = "./tensorboard_logs"
@@ -209,6 +213,7 @@ class TrueFoundryMLPlugin(BasePlugin):
                 run=run,
                 log_checkpoints=cfg.truefoundry_ml_log_checkpoints,
                 checkpoint_artifact_name=cfg.truefoundry_ml_checkpoint_artifact_name,
+                log_gpu_metrics=cfg.truefoundry_ml_log_gpu_metrics,
             )
         extra_metrics_cb = ExtraMetricsCallback()
         tensorboard_cb_idx = None
