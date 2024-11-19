@@ -34,9 +34,6 @@ def _make_dataset_file_source(
     Axolotl dynamically loads prompt strategies based on the `type` key
     The modules are present at axolotl.prompt_strategies.*
     The `load` function in the module is called with the tokenizer, cfg and ds_cfg
-
-    Ideally we want to use the HF tokenizers library to apply the base model's chat template
-    But axolotl's chat template strategy forces to select one of the built-in template.
     """
     if dataset_type == DatasetType.completion:
         return {

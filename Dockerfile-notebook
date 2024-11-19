@@ -1,4 +1,4 @@
-FROM tfy.jfrog.io/tfy-images/jupyter:0.3.4-cu121-py3.11.10-sudo
+FROM tfy.jfrog.io/tfy-images/jupyter:0.3.5-cu121-py3.11.10-sudo
 SHELL ["/bin/bash", "-c"]
 ENV TORCH_CUDA_ARCH_LIST="7.0 7.5 8.0 8.6 8.9 9.0+PTX"
 ENV DEBIAN_FRONTEND=noninteractive
@@ -29,7 +29,7 @@ USER jovyan
 RUN cd /packages && \
     git clone https://github.com/truefoundry/axolotl && \
     cd axolotl/ && \
-    git checkout 285193c1933dac665ae08b9eef95a355117bf8a2 && \
+    git checkout 57167dd92567f64371286ebf56ab9ca01d0685d7 && \
     cd /packages/axolotl/ && \
     MAX_JOBS=1 NVCC_APPEND_FLAGS="--threads 1" pip install -U --no-build-isolation --no-cache-dir -e .[flash-attn,mamba-ssm,optimizers,lion-pytorch,galore]
 

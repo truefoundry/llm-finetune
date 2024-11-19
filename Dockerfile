@@ -1,5 +1,5 @@
-# https://hub.docker.com/layers/winglian/axolotl/main-20241104-py3.11-cu121-2.3.1/images/sha256-790297fa1d71f8f1590c73ca4505ca39fe7dfa2886b2b6862199a6df679bf8e4?context=explore
-FROM winglian/axolotl@sha256:cffbcc4993e80301a8918062f8136a6ac402877fd6c29f1168be563e543aee4d
+# https://hub.docker.com/layers/winglian/axolotl/main-20241111-py3.11-cu121-2.3.1/images/sha256-67c35533cf8e7a399de19cdaf3852be093b9e184b9554ea38801a482da5d7231?context=explore
+FROM winglian/axolotl@sha256:1f892444717a6781ad0e6e02b3548cd76be14d65a7162f2d82eab5c809936bc5
 SHELL ["/bin/bash", "-c"]
 USER root
 
@@ -14,7 +14,7 @@ RUN mkdir -p /packages && \
     cd /packages && \
     git clone https://github.com/truefoundry/axolotl && \
     cd axolotl/ && \
-    git checkout 285193c1933dac665ae08b9eef95a355117bf8a2 && \
+    git checkout 57167dd92567f64371286ebf56ab9ca01d0685d7 && \
     cd /packages/axolotl/ && \
     MAX_JOBS=1 NVCC_APPEND_FLAGS="--threads 1" pip install -U --no-build-isolation --no-cache-dir -e .[flash-attn,mamba-ssm,optimizers,lion-pytorch,galore] && \
     rm -rf /root/.cache/pip
