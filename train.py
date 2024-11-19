@@ -244,6 +244,8 @@ def _train_with_truefoundry(config_base: Path = Path("examples/"), **kwargs):
     barrier()
     if is_main_process():
         cfg = load_config_file(path=axolotl_config)
+        if cfg.truefoundry_testing_mode is True:
+            return
         model_dir = cfg.output_dir
         log_step = get_step_for_final_model(
             output_dir=cfg.output_dir, load_best_model_at_end=cfg.load_best_model_at_end
@@ -298,6 +300,7 @@ def train_with_truefoundry(config_base: Path = Path("examples/"), **kwargs):
         error_message = (
             f"Rank {LOCAL_RANK} failed with error: {str(e)}\nPlease see the following traceback for more details."
         )
+        logger.error(error_message)
         c.print(panel.Panel.fit(f"[red]{error_message}[/]", title="Error", border_style="bright_red"))
         raise
 

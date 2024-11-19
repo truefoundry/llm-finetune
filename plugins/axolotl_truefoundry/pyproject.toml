@@ -13,6 +13,7 @@ dependencies = [
     "pynvml>=11.0.0,<12",
     "torch>=2.3.0,<2.4.0",
     "pydantic>=2.0.0,<3",
+    "orjson",
 ]
 
 [tool.setuptools]

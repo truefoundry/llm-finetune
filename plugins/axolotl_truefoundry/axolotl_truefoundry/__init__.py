@@ -5,6 +5,7 @@ import os
 from typing import TYPE_CHECKING, Any, Dict, List, Optional
 
 import numpy as np
+import orjson
 import pynvml
 import torch
 from axolotl.integrations.base import BasePlugin
@@ -22,6 +23,10 @@ if TYPE_CHECKING:
 TFY_INTERNAL_JOB_NAME = os.getenv("TFY_INTERNAL_COMPONENT_NAME")
 TFY_INTERNAL_JOB_RUN_NAME = os.getenv("TFY_INTERNAL_JOB_RUN_NAME")
 logger = logging.getLogger("axolotl")
+
+
+def _json_dumps(data) -> str:
+    return orjson.dumps(data, option=orjson.OPT_NAIVE_UTC | orjson.OPT_SERIALIZE_NUMPY).decode("utf-8")
 
 
 def _drop_non_finite_values(dct: Dict[str, Any]) -> Dict[str, Any]:
@@ -68,6 +73,10 @@ def get_or_create_run(ml_repo: str, run_name: str, auto_end: bool = False):
 
 
 class ExtraMetricsCallback(TrainerCallback):
+    def __init__(self, plugin_logger: logging.Logger):
+        super().__init__()
+        self._plugin_logger = plugin_logger
+
     def _add_perplexity(self, logs):
         for loss_key, perplexity_key in [
             ("loss", "train_perplexity"),
@@ -91,7 +100,8 @@ class ExtraMetricsCallback(TrainerCallback):
 
         self._add_perplexity(logs)
         logs.update(get_gpu_metrics())
-        logger.info(f"Metrics: {logs}")
+        logger.info(f"Metrics: {_json_dumps(logs)}")
+        self._plugin_logger.info(_json_dumps(_drop_non_finite_values(logs)))
 
 
 class TrueFoundryMLCallback(TrainerCallback):
@@ -192,16 +202,42 @@ class TruefoundryMLPluginArgs(BaseModel):
     cleanup_output_dir_on_start: bool = False
     logging_dir: str = "./tensorboard_logs"
 
+    truefoundry_testing_mode: bool = False
+
 
 class TrueFoundryMLPlugin(BasePlugin):
+    def __init__(self):
+        super().__init__()
+        plugin_logger = logging.getLogger(__name__)
+        plugin_logger.setLevel(logging.INFO)
+        plugin_file_handler = logging.FileHandler("axolotl_truefoundry.plugin.log", "a")
+        plugin_file_handler.setLevel(logging.INFO)
+        plugin_file_handler.setFormatter(logging.Formatter("%(message)s"))
+        plugin_logger.addHandler(plugin_file_handler)
+        plugin_logger.propagate = False
+        self.plugin_logger = plugin_logger
+
     def get_input_args(self):
         return "axolotl_truefoundry.TruefoundryMLPluginArgs"
+
+    def post_model_load(self, cfg, model):
+        if not is_main_process():
+            return None
+        from peft import PeftModel
+
+        if isinstance(model, PeftModel):
+            trainable_params, all_params = model.get_nb_trainable_parameters()
+        else:
+            trainable_params = sum(p.numel() for p in model.parameters() if p.requires_grad)
+            all_params = sum(p.numel() for p in model.parameters())
+        params = {"trainable_params": trainable_params, "all_params": all_params}
+        self.plugin_logger.info(_json_dumps(params))
 
     def add_callbacks_post_trainer(self, cfg: TruefoundryMLPluginArgs, trainer: Trainer) -> List[TrainerCallback]:
         # Note: `cfg` is not really an instance of `TruefoundryMLPluginArgs` but a `DictDefault` object
         if not is_main_process():
             return []
-        logger.info(f"Config: {cfg}")
+        logger.debug(f"Config: {cfg}")
         truefoundry_ml_cb = None
         if cfg.truefoundry_ml_enable_reporting is True:
             run = get_or_create_run(
@@ -215,7 +251,7 @@ class TrueFoundryMLPlugin(BasePlugin):
                 checkpoint_artifact_name=cfg.truefoundry_ml_checkpoint_artifact_name,
                 log_gpu_metrics=cfg.truefoundry_ml_log_gpu_metrics,
             )
-        extra_metrics_cb = ExtraMetricsCallback()
+        extra_metrics_cb = ExtraMetricsCallback(plugin_logger=self.plugin_logger)
         tensorboard_cb_idx = None
         for i, cb in enumerate(trainer.callback_handler.callbacks):
             if isinstance(cb, TensorBoardCallback):

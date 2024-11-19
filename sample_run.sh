@@ -31,11 +31,11 @@ accelerate launch \
 train.py \
 config-base.yaml \
 --deepspeed ./deepspeed_configs/3_ds_z2_config.json \
---base_model Qwen/Qwen2.5-7B-Instruct \
+--base_model Qwen/Qwen2.5-0.5B-Instruct \
+--dataset_type chat \
 --train_data_uri ./sample_data/chatalpaca-openai-1k.jsonl \
 --val_data_uri None \
 --val_set_size 0.2 \
---dataset_type chat \
 --sequence_len 4096 \
 --max_steps 0 \
 --micro_batch_size 1 \

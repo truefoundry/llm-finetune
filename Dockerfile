@@ -14,9 +14,9 @@ RUN mkdir -p /packages && \
     cd /packages && \
     git clone https://github.com/truefoundry/axolotl && \
     cd axolotl/ && \
-    git checkout 57167dd92567f64371286ebf56ab9ca01d0685d7 && \
+    git checkout 0011a3969eeceffc5140315a41d64048cca0ac30 && \
     cd /packages/axolotl/ && \
-    MAX_JOBS=1 NVCC_APPEND_FLAGS="--threads 1" pip install -U --no-build-isolation --no-cache-dir -e .[flash-attn,mamba-ssm,optimizers,lion-pytorch,galore] && \
+    MAX_JOBS=1 NVCC_APPEND_FLAGS="--threads 1" pip install -U --use-pep517 --no-build-isolation --no-cache-dir -e .[flash-attn,mamba-ssm,optimizers,lion-pytorch,galore] && \
     rm -rf /root/.cache/pip
 
 # Install axolotl_truefoundry plugin with our requirements overrides over axolotl
