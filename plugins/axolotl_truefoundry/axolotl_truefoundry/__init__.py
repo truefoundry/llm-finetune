@@ -11,7 +11,7 @@ import torch
 from axolotl.integrations.base import BasePlugin
 from axolotl.utils.callbacks import GPUStatsCallback
 from axolotl.utils.distributed import is_main_process
-from pydantic import BaseModel, ConfigDict
+from pydantic import BaseModel, ConfigDict, model_validator
 from transformers import Trainer, TrainerCallback
 from transformers.integrations import rewrite_logs
 from transformers.integrations.integration_utils import TensorBoardCallback
@@ -184,12 +184,16 @@ class LongSequenceStrategy(str, enum.Enum):
 class TruefoundryMLPluginArgs(BaseModel):
     model_config = ConfigDict(use_enum_values=True)
 
+    cleanup_output_dir_on_start: bool = False
+    logging_dir: str = "./tensorboard_logs"
+
     dataset_type: DatasetType = DatasetType.chat
     train_data_uri: Optional[str]
     val_data_uri: Optional[str] = None
     val_set_size: float = 0.1
 
     long_sequences_strategy: LongSequenceStrategy = LongSequenceStrategy.error
+    merge_adapters_post_train: bool = True
 
     truefoundry_ml_enable_reporting: bool = False
     truefoundry_ml_repo: Optional[str] = None
@@ -199,10 +203,20 @@ class TruefoundryMLPluginArgs(BaseModel):
     truefoundry_ml_log_merged_model: bool = True
     truefoundry_ml_log_gpu_metrics: bool = False
 
-    cleanup_output_dir_on_start: bool = False
-    logging_dir: str = "./tensorboard_logs"
-
-    truefoundry_testing_mode: bool = False
+    @model_validator(mode="before")
+    @classmethod
+    def check_merging_settings(cls, data: Any) -> Any:
+        if isinstance(data, dict):
+            if (
+                data.get("truefoundry_ml_enable_reporting")
+                and data.get("truefoundry_ml_log_merged_model")
+                and not data.get("merge_adapters_post_train")
+            ):
+                raise ValueError(
+                    "Cannot log merged model if merge_adapters_post_train is False. "
+                    "Please set merge_adapters_post_train to True or disable logging merged model."
+                )
+        return data
 
 
 class TrueFoundryMLPlugin(BasePlugin):

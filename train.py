@@ -244,14 +244,12 @@ def _train_with_truefoundry(config_base: Path = Path("examples/"), **kwargs):
     barrier()
     if is_main_process():
         cfg = load_config_file(path=axolotl_config)
-        if cfg.truefoundry_testing_mode is True:
-            return
         model_dir = cfg.output_dir
         log_step = get_step_for_final_model(
             output_dir=cfg.output_dir, load_best_model_at_end=cfg.load_best_model_at_end
         )
         cleanup_checkpoints(output_dir=cfg.output_dir)
-        if cfg.adapter in {"lora", "qlora"}:
+        if cfg.adapter in {"lora", "qlora"} and cfg.merge_adapters_post_train:
             with temporarily_unset_distributed_envs():
                 axolotl_merge_lora_cli(config=axolotl_config, device_map="auto")
             model_dir = os.path.join(model_dir, "merged")

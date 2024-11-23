@@ -2,6 +2,7 @@
 A very hacky script to test out capturing GPU memory usage against tokens and trainable parameters
 Later this will be more automated and parallelized across TrueFoundry Jobs
 """
+import argparse
 import itertools
 import json
 import os
@@ -11,20 +12,27 @@ import uuid
 from concurrent.futures import ThreadPoolExecutor
 from typing import List
 
+import pandas as pd
+import yaml
+from pydantic import BaseModel
 from transformers import AutoConfig
 
-ML_REPO = "llm-ft-reporting"
 
-MODELS = [
-    "Qwen/Qwen2.5-0.5B-Instruct",
-    "Qwen/Qwen2.5-1.5B-Instruct",
-    "Qwen/Qwen2.5-3B-Instruct",
-    "Qwen/Qwen2.5-7B-Instruct",
-    "Qwen/Qwen2.5-14B-Instruct",
-    "Qwen/Qwen2.5-32B-Instruct",
-]
-SEQ_LENS = [512, 1024, 2048, 4096, 8192]
-LORA_RS = [8, 16, 32]
+class ReportingConfig(BaseModel):
+    ml_repo: str = "llm-ft-reporting"
+    base_models: List[str] = [
+        "Qwen/Qwen2.5-0.5B-Instruct",
+        "Qwen/Qwen2.5-1.5B-Instruct",
+        "Qwen/Qwen2.5-3B-Instruct",
+        "Qwen/Qwen2.5-7B-Instruct",
+        "Qwen/Qwen2.5-14B-Instruct",
+        "Qwen/Qwen2.5-32B-Instruct",
+    ]
+    sequence_lens: List[int] = [512, 1024, 2048, 4096, 8192]
+    lora_rs: List[int] = [32]
+    stream_stdout: bool = False
+    stream_stderr: bool = False
+
 
 COMMAND = """\
 accelerate launch
@@ -37,13 +45,14 @@ config-base.yaml
 --dataset_type chat
 --train_data_uri ./sample_data/chatalpaca-openai-1k.jsonl
 --val_data_uri None
---val_set_size 0.1
+--val_set_size 0.2
 --sequence_len {sequence_len}
 --long_sequences_strategy drop
 --micro_batch_size 1
 --eval_batch_size 1
+--eval_sample_packing True
 --num_epochs 1
---max_steps 10
+--max_steps 3
 --gradient_accumulation_steps 4
 --gradient_checkpointing unsloth
 --learning_rate 0.00001
@@ -67,7 +76,7 @@ config-base.yaml
 --truefoundry_ml_log_checkpoints False
 --truefoundry_ml_log_gpu_metrics True
 --truefoundry_ml_log_merged_model False
---truefoundry_testing_mode True
+--merge_adapters_post_train False
 """
 
 
@@ -77,7 +86,7 @@ def stream_output(pipe, prefix=""):
     pipe.close()
 
 
-def run_command(command: List[str]):
+def run_command(command: List[str], stream_stdout=False, stream_stderr=False):
     print("Running command: ", " ".join(command))
     try:
         process = subprocess.Popen(
@@ -91,10 +100,11 @@ def run_command(command: List[str]):
             shell=True,
         )
         with ThreadPoolExecutor() as executor:
-            futures = [
-                executor.submit(stream_output, process.stdout, "STDOUT: "),
-                # executor.submit(stream_output, process.stderr, "STDERR: "),
-            ]
+            futures = []
+            if stream_stdout:
+                futures.append(executor.submit(stream_output, process.stdout, "STDOUT: "))
+            if stream_stderr:
+                futures.append(executor.submit(stream_output, process.stderr, "STDERR: "))
             process.wait()
             for future in futures:
                 future.result()
@@ -107,14 +117,25 @@ def run_command(command: List[str]):
 
 
 def main():
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--config", type=str, default="reporting_config.yaml")
+    parser.add_argument("--output", type=str, default="report.csv")
+    args = parser.parse_args()
+    with open(args.config) as f:
+        config = yaml.safe_load(f)
+    config = ReportingConfig.model_validate(config)
     env = {
         "PYTORCH_CUDA_ALLOC_CONF": "expandable_segments:True,roundup_power2_divisions:16",
         "CUDA_VISIBLE_DEVICES": "0",
         "TORCH_PER_PROCESS_MEMORY_LIMIT": "0.98",
+        "GPU_CLEANUP_N_ITERS": "3",
+        "GPU_CLEANUP_INTERVAL_SECONDS": "3",
     }
     for k, v in env.items():
         os.environ[k] = v
-    for model, seq_len, lora_r in itertools.product(MODELS, SEQ_LENS, LORA_RS):
+
+    reports = []
+    for model, seq_len, lora_r in itertools.product(config.base_models, config.sequence_lens, config.lora_rs):
         if os.path.exists("axolotl_truefoundry.plugin.log"):
             os.remove("axolotl_truefoundry.plugin.log")
         if os.path.exists("train.log"):
@@ -126,12 +147,14 @@ def main():
             sequence_len=str(seq_len),
             lora_r=str(lora_r),
             lora_alpha=str(lora_r * 2),
-            ml_repo=ML_REPO,
+            ml_repo=config.ml_repo,
             run_name=run_name,
         )
         try:
             run_command(
                 shlex.split(command),
+                stream_stdout=config.stream_stdout,
+                stream_stderr=config.stream_stderr,
             )
         except Exception as e:
             print(f"Failed to run command: {e}")
@@ -156,22 +179,29 @@ def main():
                 if "CUDA out of memory. Tried to allocate" in line:
                     cuda_oom = True
                     break
-        config = AutoConfig.from_pretrained(model, trust_remote_code=True)
+        model_config = AutoConfig.from_pretrained(model, trust_remote_code=True)
+        report = {
+            "base_model": model,
+            "seq_len": seq_len,
+            "lora_r": lora_r,
+            "trainable_params": trainable_params,
+            "all_params": all_params,
+            "cuda_oom": cuda_oom,
+            "max_gpu_memory_allocated": max_gpu_memory_allocated,
+            "model_config": json.loads(model_config.to_json_string()),
+        }
         print("=" * 80)
-        print(f"Config: {config}")
-        print(f"Model: {model}")
-        print(f"Seq Len: {seq_len}")
-        print(f"LoRA R: {lora_r}")
-        print(f"Trainable Params: {trainable_params}")
-        print(f"All Params: {all_params}")
-        print(f"CUDA OOM: {cuda_oom}")
-        print(f"GPU Memory Allocated: {max_gpu_memory_allocated}")
+        print(json.dumps(report))
         print("=" * 80)
+        reports.append(report)
         if not trainable_params or not all_params:
             raise Exception("Failed to capture params")
 
         if not cuda_oom and max_gpu_memory_allocated == -1:
             raise Exception("Failed to capture GPU memory usage")
+
+    df = pd.DataFrame(reports)
+    df.to_csv(args.output, index=False)
 
 
 if __name__ == "__main__":

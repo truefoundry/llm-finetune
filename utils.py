@@ -33,7 +33,10 @@ def get_gpu_metrics():
     return metrics
 
 
-def try_cleanup_gpus(n_iters=6, interval_seconds=10):
+def try_cleanup_gpus(
+    n_iters=int(os.getenv("GPU_CLEANUP_N_ITERS", 6)),
+    interval_seconds=int(os.getenv("GPU_CLEANUP_INTERVAL_SECONDS", 10)),
+):
     for _ in range(n_iters):
         gc.collect()
         time.sleep(interval_seconds)

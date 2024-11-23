@@ -116,6 +116,7 @@ cleanup_output_dir_on_start: False
 dataset_type: chat  # Can be completion | chat
 drop_long_sequences: False
 logging_dir: ./tensorboard_logs
+merge_adapters_post_train: True
 save_model_on_interrupt: False
 train_data_uri: null
 truefoundry_ml_checkpoint_artifact_name: auto # type: string
