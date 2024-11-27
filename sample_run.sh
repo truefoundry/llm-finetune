@@ -43,7 +43,7 @@ config-base.yaml \
 --num_epochs 5 \
 --gradient_accumulation_steps 4 \
 --gradient_checkpointing unsloth \
---learning_rate 0.00001 \
+--learning_rate 0.00009 \
 --output_dir ./outputs \
 --train_on_inputs False \
 --logging_steps 1 \
