@@ -7,7 +7,7 @@ export PYTORCH_CUDA_ALLOC_CONF="expandable_segments:True,roundup_power2_division
 export CUDA_VISIBLE_DEVICES=0
 ## This controls how much memory to user per gpu
 export TORCH_PER_PROCESS_MEMORY_LIMIT=0.98
-
+export HF_HUB_ENABLE_HF_TRANSFER=1
 ## Add your token for private/gated models
 export HF_TOKEN=
 
@@ -31,7 +31,7 @@ accelerate launch \
 train.py \
 config-base.yaml \
 --deepspeed ./deepspeed_configs/3_ds_z2_config.json \
---base_model Qwen/Qwen2.5-0.5B-Instruct \
+--base_model unsloth/Llama-3.2-1B-Instruct \
 --dataset_type chat \
 --train_data_uri ./sample_data/chatalpaca-openai-1k.jsonl \
 --val_data_uri None \

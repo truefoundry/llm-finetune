@@ -14,7 +14,7 @@ RUN mkdir -p /packages && \
     cd /packages && \
     git clone https://github.com/truefoundry/axolotl && \
     cd axolotl/ && \
-    git checkout 1442cf55cd7b1c257a525450996355473fdcbb35 && \
+    git checkout b8db5db0fea9a1dad15338c1daf73a04f647caf4 && \
     cd /packages/axolotl/ && \
     MAX_JOBS=1 NVCC_APPEND_FLAGS="--threads 1" pip install -U --use-pep517 --no-build-isolation --no-cache-dir -e .[flash-attn,mamba-ssm,optimizers,lion-pytorch,galore] && \
     rm -rf /root/.cache/pip
