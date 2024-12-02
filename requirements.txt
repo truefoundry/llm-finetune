@@ -7,4 +7,4 @@ snowflake-connector-python[pandas]==3.12.3
 torch==2.3.1+cu121
 torchao==0.6.1+cu121
 truefoundry>=0.4.10,<0.5.0
-unsloth[cu121-ampere-torch230]==2024.11.9
+unsloth[cu121-ampere-torch230] @ git+https://github.com/unslothai/unsloth.git@8558bc92b06f9128499484ef737fa71b966ffc23
