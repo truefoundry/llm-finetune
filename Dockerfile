@@ -3,26 +3,19 @@ FROM winglian/axolotl@sha256:1f892444717a6781ad0e6e02b3548cd76be14d65a7162f2d82e
 SHELL ["/bin/bash", "-c"]
 USER root
 
-# Install torch
-COPY requirements.txt /tmp/
+# Install torch and axolotl requirements
+COPY torch-requirements.txt base-requirements.txt requirements.txt /tmp/
 RUN pip install -U pip wheel setuptools && \
     pip uninstall -y axolotl && \
-    pip install --no-cache-dir -U -r /tmp/requirements.txt
-
-# Install axolotl
-RUN mkdir -p /packages && \
-    cd /packages && \
-    git clone https://github.com/truefoundry/axolotl && \
-    cd axolotl/ && \
-    git checkout b8db5db0fea9a1dad15338c1daf73a04f647caf4 && \
-    cd /packages/axolotl/ && \
-    MAX_JOBS=1 NVCC_APPEND_FLAGS="--threads 1" pip install -U --use-pep517 --no-build-isolation --no-cache-dir -e .[flash-attn,mamba-ssm,optimizers,lion-pytorch,galore] && \
+    pip install --no-cache-dir -U -r /tmp/torch-requirements.txt && \
+    MAX_JOBS=1 NVCC_APPEND_FLAGS="--threads 1" pip install -U --use-pep517 --no-build-isolation --no-cache-dir -r requirements.txt && \
     rm -rf /root/.cache/pip
 
-# Install axolotl_truefoundry plugin with our requirements overrides over axolotl
+# Install axolotl_truefoundry plugin
 COPY plugins/axolotl_truefoundry /packages/axolotl_truefoundry
-RUN cd /packages/axolotl_truefoundry/ && \
-    pip install --no-cache-dir -U -r /tmp/requirements.txt -e . && \
+RUN mkdir -p /packages && \
+    cd /packages/axolotl_truefoundry/ && \
+    pip install --no-cache-dir -e . && \
     rm -rf /root/.cache/pip
 
 WORKDIR /app

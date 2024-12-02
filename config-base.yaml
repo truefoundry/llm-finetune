@@ -66,7 +66,7 @@ gradient_accumulation_steps: 4
 gradient_checkpointing: True
 gradient_checkpointing_kwargs:
   use_reentrant: True
-learning_rate: 0.00001
+learning_rate: 0.0002
 load_best_model_at_end: True
 load_in_8bit: False
 logging_steps: 5
@@ -76,6 +76,7 @@ lora_on_cpu: False
 lora_r: 32
 lora_target_linear: True
 lora_target_modules: null
+loraplus_lr_ratio: 16
 low_cpu_mem_usage: True
 lr_scheduler: cosine
 max_grad_norm: 1.0
@@ -84,6 +85,8 @@ multipack_real_batches: False
 num_epochs: 10
 optimizer: adamw_torch_fused
 output_dir: ./outputs
+peft_use_dora: True
+peft_use_rslora: True
 plugins:
   - axolotl_truefoundry.TrueFoundryMLPlugin
   - axolotl.integrations.liger.LigerPlugin
