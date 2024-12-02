@@ -4,11 +4,10 @@ SHELL ["/bin/bash", "-c"]
 USER root
 
 # Install torch and axolotl requirements
-COPY torch-requirements.txt base-requirements.txt requirements.txt /tmp/
+COPY torch-requirements.txt base-requirements.txt requirements.txt /tmp/llm-finetune/
 RUN pip install -U pip wheel setuptools && \
     pip uninstall -y axolotl && \
-    pip install --no-cache-dir -U -r /tmp/torch-requirements.txt && \
-    MAX_JOBS=1 NVCC_APPEND_FLAGS="--threads 1" pip install -U --use-pep517 --no-build-isolation --no-cache-dir -r requirements.txt && \
+    MAX_JOBS=1 NVCC_APPEND_FLAGS="--threads 1" pip install -U --no-cache-dir --no-build-isolation --use-pep517 -r /tmp/llm-finetune/requirements.txt && \
     rm -rf /root/.cache/pip
 
 # Install axolotl_truefoundry plugin
