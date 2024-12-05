@@ -1,4 +1,4 @@
-FROM tfy.jfrog.io/tfy-images/jupyter:0.3.7-cu121-py3.11.10-sudo
+FROM tfy.jfrog.io/tfy-images/jupyter:0.3.8-cu121-py3.11.10-sudo
 SHELL ["/bin/bash", "-c"]
 ENV TORCH_CUDA_ARCH_LIST="7.0 7.5 8.0 8.6 8.9 9.0+PTX"
 ENV DEBIAN_FRONTEND=noninteractive

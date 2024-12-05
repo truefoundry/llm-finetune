@@ -152,6 +152,11 @@ def make_axolotl_config(config_base, kwargs, timestamp=None):
         )
         is_tf32_supported = is_ampere_or_newer and is_torch_tf32_available()
         is_bf16_supported = is_ampere_or_newer and is_torch_bf16_gpu_available()
+
+        single_gpu = torch.cuda.device_count() == 1
+        using_deepspeed = cfg.deepspeed is not None
+        use_unsloth_lora = False  # single_gpu and not using_deepspeed and cfg.adapter in {"qlora", "lora"}
+
         set_cfg_option_if_auto(cfg, "tf32", is_tf32_supported)
         # TODO: Axolotl doesn't seem to do anything differently even though it says setting bfloat16/float16 will disable AMP
         set_cfg_option_if_auto(cfg, "bf16", is_bf16_supported)
@@ -159,21 +164,23 @@ def make_axolotl_config(config_base, kwargs, timestamp=None):
         set_cfg_option_if_auto(cfg, "fp16", not is_bf16_supported)
         set_cfg_option_if_auto(cfg, "float16", not is_bf16_supported)
 
-        set_cfg_option_if_auto(cfg, "flash_attention", is_ampere_or_newer)
-        set_cfg_option_if_auto(cfg, "flash_attn_cross_entropy", is_ampere_or_newer)
-        set_cfg_option_if_auto(cfg, "flash_attn_rms_norm", is_ampere_or_newer)
-
         set_cfg_option_if_auto(cfg, "load_in_4bit", cfg.adapter == "qlora")
+
+        # TODO (chiragjn): Add model arch condition
+        set_cfg_option_if_auto(cfg, "unsloth_cross_entropy_loss", single_gpu and not using_deepspeed)
+        set_cfg_option_if_auto(cfg, "unsloth_rms_norm", single_gpu and not using_deepspeed)
+        set_cfg_option_if_auto(cfg, "unsloth_rope", single_gpu and not using_deepspeed)
+        set_cfg_option_if_auto(cfg, "unsloth_lora_mlp", use_unsloth_lora)
+        set_cfg_option_if_auto(cfg, "unsloth_lora_qkv", use_unsloth_lora)
+        set_cfg_option_if_auto(cfg, "unsloth_lora_o", use_unsloth_lora)
+
+        set_cfg_option_if_auto(cfg, "flash_attention", is_ampere_or_newer)
+        set_cfg_option_if_auto(cfg, "flash_attn_cross_entropy", not cfg.unsloth_cross_entropy_loss)
+        set_cfg_option_if_auto(cfg, "flash_attn_rms_norm", is_ampere_or_newer)
         set_cfg_option_if_auto(cfg, "flash_attn_fuse_mlp", cfg.adapter not in {"qlora", "lora"})
         set_cfg_option_if_auto(cfg, "flash_attn_fuse_qkv", cfg.adapter not in {"qlora", "lora"})
 
-        use_unsloth = False  # torch.cuda.device_count() == 1
-        set_cfg_option_if_auto(cfg, "unsloth_cross_entropy_loss", use_unsloth)
-        set_cfg_option_if_auto(cfg, "unsloth_lora_mlp", use_unsloth)
-        set_cfg_option_if_auto(cfg, "unsloth_lora_qkv", use_unsloth)
-        set_cfg_option_if_auto(cfg, "unsloth_lora_o", use_unsloth)
-        set_cfg_option_if_auto(cfg, "unsloth_rms_norm", use_unsloth)
-        set_cfg_option_if_auto(cfg, "unsloth_rope", use_unsloth)
+        set_cfg_option_if_auto(cfg, "optimizer", "adamw_torch_fused" if cfg.adapter == "qlora" else "adamw_torch")
 
         if cfg.datasets == "auto":
             if not cfg.train_data_uri:

@@ -31,16 +31,16 @@ accelerate launch \
 train.py \
 config-base.yaml \
 --deepspeed ./deepspeed_configs/3_ds_z2_config.json \
---base_model unsloth/Llama-3.2-1B-Instruct \
+--base_model HuggingFaceTB/SmolLM2-135M-Instruct \
 --dataset_type chat \
 --train_data_uri ./sample_data/chatalpaca-openai-1k.jsonl \
 --val_data_uri None \
 --val_set_size 0.2 \
 --sequence_len 4096 \
 --max_steps 0 \
---micro_batch_size 1 \
---eval_batch_size 1 \
---num_epochs 5 \
+--micro_batch_size 4 \
+--eval_batch_size 4 \
+--num_epochs 10 \
 --gradient_accumulation_steps 4 \
 --gradient_checkpointing unsloth \
 --learning_rate 0.0002 \
@@ -53,8 +53,8 @@ config-base.yaml \
 --eval_steps 0.2 \
 --adapter qlora \
 --lora_target_linear True \
---lora_r 64 \
---lora_alpha 128 \
+--lora_r 16 \
+--lora_alpha 64 \
 --truefoundry_ml_enable_reporting $TRUEFOUNDRY_ML_ENABLE_REPORTING \
 --truefoundry_ml_repo $TRUEFOUNDRY_ML_REPO \
 --truefoundry_ml_run_name $TRUEFOUNDRY_ML_RUN_NAME \

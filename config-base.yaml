@@ -24,6 +24,7 @@ float16: auto # type: bool
 fp16: auto # type: bool
 load_in_4bit: auto # type: bool
 lora_modules_to_save: auto # type: list
+optimizer: auto # type: string
 resume_from_checkpoint: auto # type: bool
 special_tokens: auto  # type: dict
 unsloth_cross_entropy_loss: auto # type: bool
@@ -83,7 +84,6 @@ max_grad_norm: 1.0
 mean_resizing_embeddings: True
 multipack_real_batches: False
 num_epochs: 10
-optimizer: adamw_torch_fused
 output_dir: ./outputs
 peft_use_dora: True
 peft_use_rslora: True
