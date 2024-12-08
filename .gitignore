@@ -19,3 +19,4 @@ outputs/
 *.egg-info/
 .ipynb_checkpoints/
 !sample_data/chatalpaca-openai-1k.jsonl
+!sample_data/multiply-1k.jsonl
