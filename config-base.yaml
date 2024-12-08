@@ -62,7 +62,7 @@ early_stopping_patience: 10
 eval_sample_packing: False
 eval_steps: 0.1
 eval_strategy: steps
-fix_untrained_tokens: True
+fix_untrained_tokens: False
 gradient_accumulation_steps: 4
 gradient_checkpointing: True
 gradient_checkpointing_kwargs:
