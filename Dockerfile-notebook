@@ -28,7 +28,7 @@ RUN mkdir -p /packages && \
 # Install axolotl_truefoundry plugin with our requirements overrides over axolotl
 COPY --chown=jovyan:users plugins/axolotl_truefoundry /packages/axolotl_truefoundry
 RUN cd /packages/axolotl_truefoundry/ && \
-    pip install --no-cache-dir -U -r /tmp/llm-finetune/notebook-requirements.txt -e .
+    pip install --no-cache-dir -e .
 
 # Add source code for finetuning
 COPY --chown=jovyan:users . /tmp_home/jovyan/llm-finetune/

@@ -11,7 +11,7 @@ import torch
 from axolotl.integrations.base import BasePlugin
 from axolotl.utils.callbacks import GPUStatsCallback
 from axolotl.utils.distributed import is_main_process
-from pydantic import BaseModel, ConfigDict, model_validator
+from pydantic import BaseModel, ConfigDict, Field, model_validator
 from transformers import Trainer, TrainerCallback
 from transformers.integrations import rewrite_logs
 from transformers.integrations.integration_utils import TensorBoardCallback
@@ -92,7 +92,8 @@ class ExtraMetricsCallback(TrainerCallback):
                 logs[perplexity_key] = perplexity
 
     # noinspection PyMethodOverriding
-    def on_log(self, args, state, control, logs, model=None, **kwargs):
+    def on_log(self, args, state, control, logs=None, model=None, **kwargs):
+        logs = logs or {}
         # TODO (chiragjn): Hack for now, needs to be moved to `compute_metrics`
         #   unfortunately compute metrics does not give us already computed metrics like eval_loss
         if not state.is_world_process_zero:
@@ -121,7 +122,8 @@ class TrueFoundryMLCallback(TrainerCallback):
             logger.warning("checkpoint_artifact_name not passed. Checkpoints will not be logged to MLFoundry")
 
     # noinspection PyMethodOverriding
-    def on_log(self, args, state, control, logs, model=None, **kwargs):
+    def on_log(self, args, state, control, logs=None, model=None, **kwargs):
+        logs = logs or {}
         if not state.is_world_process_zero:
             return
 
@@ -183,17 +185,15 @@ class LongSequenceStrategy(str, enum.Enum):
 
 class TruefoundryMLPluginArgs(BaseModel):
     model_config = ConfigDict(use_enum_values=True)
-
     cleanup_output_dir_on_start: bool = False
     logging_dir: str = "./tensorboard_logs"
-
     dataset_type: DatasetType = DatasetType.chat
     train_data_uri: Optional[str]
     val_data_uri: Optional[str] = None
     val_set_size: float = 0.1
-
     long_sequences_strategy: LongSequenceStrategy = LongSequenceStrategy.error
     merge_adapters_post_train: bool = True
+    extra_hf_training_args: Dict[str, Any] = Field(default_factory=dict)
 
     truefoundry_ml_enable_reporting: bool = False
     truefoundry_ml_repo: Optional[str] = None

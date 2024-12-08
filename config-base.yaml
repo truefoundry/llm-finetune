@@ -118,6 +118,9 @@ use_tensorboard: True
 cleanup_output_dir_on_start: False
 dataset_type: chat  # Can be completion | chat
 drop_long_sequences: False
+extra_hf_training_args:
+  average_tokens_across_devices: True
+  eval_on_start: True
 logging_dir: ./tensorboard_logs
 merge_adapters_post_train: True
 save_model_on_interrupt: False
