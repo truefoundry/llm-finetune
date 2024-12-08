@@ -97,6 +97,7 @@ class LaunchParameters(BaseModel):
     model_id: str = "TinyLlama/TinyLlama-1.1B-Chat-v1.0"
     max_length: Optional[int] = 2048
     batch_size: int = 1
+    learning_rate: float = 0.0001
 
 
 def load_launch_parameters(path):

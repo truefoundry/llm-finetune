@@ -55,13 +55,13 @@ config-base.yaml
 --max_steps 3
 --gradient_accumulation_steps 4
 --gradient_checkpointing unsloth
---learning_rate 0.00001
+--learning_rate 0.0001
 --output_dir ./outputs
 --train_on_inputs False
 --logging_steps 1
 --save_strategy steps
 --save_steps 0.5
---evaluation_strategy steps
+--eval_strategy steps
 --eval_steps 0.5
 --adapter qlora
 --lora_target_linear True
