@@ -8,5 +8,5 @@ s3fs==2024.9.0
 snowflake-connector-python[pandas]==3.12.3
 torch==2.3.1+cu121
 torchao==0.6.1+cu121
-truefoundry==0.5.1
+truefoundry==0.5.2rc1
 unsloth[cu121-ampere-torch230] @ git+https://github.com/unslothai/unsloth.git@9dc399a6b6625ee40835c5eab361426d3c5d4abb
