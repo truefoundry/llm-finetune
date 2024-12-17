@@ -1,3 +1,4 @@
 --extra-index-url https://download.pytorch.org/whl/cu121
 -r base-requirements.txt
-axolotl[deepspeed,flash-attn,mamba-ssm,optimizers,lion-pytorch,galore] @ git+https://github.com/truefoundry/axolotl@c7fc338e67c4313ec82fcca304733c9ececae5c0
+unsloth[cu121-ampere-torch250] @ git+https://github.com/unslothai/unsloth.git@9dc399a6b6625ee40835c5eab361426d3c5d4abb
+axolotl[deepspeed,flash-attn,mamba-ssm,optimizers,lion-pytorch,galore] @ git+https://github.com/truefoundry/axolotl@3ebb1c88beb34610f63563f1dfcc74dee56c4b49

@@ -1,10 +1,10 @@
 FROM tfy.jfrog.io/tfy-images/jupyter:0.3.8-cu121-py3.11.10-sudo
 SHELL ["/bin/bash", "-c"]
+USER root
+RUN [ "$(/usr/local/cuda/bin/nvcc --version | egrep -o "V[0-9]+\.[0-9]+" | cut -c2-)" = "12.1" ] || (echo "Error: CUDA version is not 12.1" && exit 1)
 ENV TORCH_CUDA_ARCH_LIST="7.0 7.5 8.0 8.6 8.9 9.0+PTX"
 ENV DEBIAN_FRONTEND=noninteractive
-
 # upgrade libnccl
-USER root
 RUN apt update && \
     apt install -y --no-install-recommends git curl wget && \
     wget https://developer.download.nvidia.com/compute/cuda/repos/ubuntu2204/x86_64/cuda-keyring_1.1-1_all.deb -O /tmp/cuda-keyring_1.1-1_all.deb && \
@@ -14,11 +14,12 @@ RUN apt update && \
 
 # Install torch and axolotl
 USER jovyan
-COPY torch-requirements.txt base-requirements.txt requirements.txt notebook-requirements.txt /tmp/llm-finetune/
+COPY base-requirements.txt requirements.txt notebook-requirements.txt /tmp/llm-finetune/
 RUN pip install -U pip wheel setuptools && \
-    pip uninstall -y axolotl && \
-    pip install --no-cache-dir -U -r /tmp/llm-finetune/torch-requirements.txt && \
-    MAX_JOBS=1 NVCC_APPEND_FLAGS="--threads 1" pip install -U --no-cache-dir --no-build-isolation --use-pep517 -r /tmp/llm-finetune/notebook-requirements.txt
+    pip uninstall -y axolotl torch && \
+    pip install -U --no-cache-dir --use-pep517 -r /tmp/llm-finetune/base-requirements.txt && \
+    MAX_JOBS=1 NVCC_APPEND_FLAGS="--threads 1" pip install --no-cache-dir --no-build-isolation --use-pep517 -r /tmp/llm-finetune/requirements.txt && \
+    pip install --no-cache-dir --use-pep517 -r /tmp/llm-finetune/notebook-requirements.txt
 
 # Setup editable packages
 USER root
