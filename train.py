@@ -83,6 +83,12 @@ def make_axolotl_config(config_base, kwargs, timestamp=None):
     if not cfg.output_dir:
         raise ValueError("`output_dir` must be set in config base")
 
+    if cfg.dataset_type == "chat" and cfg.long_sequences_strategy == "truncate":
+        raise ValueError(
+            "Chat datasets cannot be truncated. Please set `long_sequences_strategy` either to "
+            "`drop` to drop sequences longer than `sequence_len` or `error` to raise an error."
+        )
+
     if is_main_process():
         if cfg.cleanup_output_dir_on_start is True:
             logger.warning(f"--cleanup_output_dir_on_start was to set to True, wiping {cfg.output_dir}")
