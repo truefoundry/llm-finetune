@@ -8,5 +8,6 @@ rich>=13.0.0,<14
 s3fs==2024.9.0
 snowflake-connector-python[pandas]==3.12.3
 torch==2.5.0+cu121
-torchao==0.5.0+cu121
-truefoundry==0.5.2rc1
+torchao==0.7.0+cu121
+transformers @ git+https://github.com/truefoundry/transformers.git@09a21295f3a13bf81b4fc22057bb2fc9ae063891
+truefoundry==0.5.3rc2

@@ -13,6 +13,7 @@ val_set_size: 0.1
 data_dir: auto # type: string
 datasets: auto # type: list
 test_datasets: auto # type: list
+batch_flattening: auto # type: bool
 bf16: auto # type: bool
 bfloat16: auto # type: bool
 flash_attention: auto # type: bool
