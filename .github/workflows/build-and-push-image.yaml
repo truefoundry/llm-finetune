@@ -44,7 +44,7 @@ jobs:
   build_image:
     name: Build image
     needs: set_version_tags
-    uses: truefoundry/github-workflows-public/.github/workflows/build.yml@v0.1.4
+    uses: truefoundry/github-workflows-public/.github/workflows/build.yml@free-more-disk-space
     with:
       image_tag: "${{ github.sha }}"
       extra_image_tag: |
