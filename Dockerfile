@@ -1,13 +1,15 @@
-# https://hub.docker.com/layers/winglian/axolotl/main-20241111-py3.11-cu121-2.3.1/images/sha256-67c35533cf8e7a399de19cdaf3852be093b9e184b9554ea38801a482da5d7231?context=explore
-FROM winglian/axolotl@sha256:1f892444717a6781ad0e6e02b3548cd76be14d65a7162f2d82eab5c809936bc5
+# https://hub.docker.com/layers/winglian/axolotl/main-20241217/images/sha256-5ed6e068d193ac35d092f8d6ccb56b1750779415cd07047edbbfb8d4edd87ae2
+FROM winglian/axolotl@sha256:0966ba0bdfda0a317016614a6eb9f599325d0e42109544f95f5540d144ddeebd
 SHELL ["/bin/bash", "-c"]
 USER root
+RUN [ "$(/usr/local/cuda/bin/nvcc --version | egrep -o "V[0-9]+\.[0-9]+" | cut -c2-)" = "12.1" ] || (echo "Error: CUDA version is not 12.1" && exit 1)
 
 # Install torch and axolotl requirements
-COPY torch-requirements.txt base-requirements.txt requirements.txt /tmp/llm-finetune/
+COPY base-requirements.txt requirements.txt /tmp/llm-finetune/
 RUN pip install -U pip wheel setuptools && \
-    pip uninstall -y axolotl && \
-    MAX_JOBS=1 NVCC_APPEND_FLAGS="--threads 1" pip install -U --no-cache-dir --no-build-isolation --use-pep517 -r /tmp/llm-finetune/requirements.txt && \
+    pip uninstall -y axolotl torch && \
+    pip install -U --no-cache-dir --use-pep517 -r /tmp/llm-finetune/base-requirements.txt && \
+    MAX_JOBS=1 NVCC_APPEND_FLAGS="--threads 1" pip install --no-cache-dir --no-build-isolation --use-pep517 -r /tmp/llm-finetune/requirements.txt && \
     rm -rf /root/.cache/pip
 
 # Install axolotl_truefoundry plugin

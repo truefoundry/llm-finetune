@@ -13,6 +13,7 @@ val_set_size: 0.1
 data_dir: auto # type: string
 datasets: auto # type: list
 test_datasets: auto # type: list
+batch_flattening: auto # type: bool
 bf16: auto # type: bool
 bfloat16: auto # type: bool
 flash_attention: auto # type: bool
@@ -90,6 +91,7 @@ peft_use_rslora: True
 plugins:
   - axolotl_truefoundry.TrueFoundryMLPlugin
   - axolotl.integrations.liger.LigerPlugin
+  - axolotl.integrations.cut_cross_entropy.CutCrossEntropyPlugin
 pad_to_sequence_len: True
 remove_unused_columns: True
 report_to: tensorboard
@@ -140,3 +142,6 @@ liger_rms_norm: True
 liger_glu_activation: True
 liger_layer_norm: True
 liger_fused_linear_cross_entropy: True
+
+## CutCrossEntropy
+cut_cross_entropy: False

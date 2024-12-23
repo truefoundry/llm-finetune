@@ -81,7 +81,13 @@ def make_axolotl_config(config_base, kwargs, timestamp=None):
             else:
                 cfg[k] = kwargs[k]
     if not cfg.output_dir:
-        raise ValueError("`output_dir` must be set in config base")
+        raise ValueError("`output_dir` must be set")
+
+    if cfg.dataset_type == "chat" and cfg.long_sequences_strategy == "truncate":
+        raise ValueError(
+            "Chat datasets cannot be truncated. Please set `long_sequences_strategy` either to "
+            "`drop` to drop sequences longer than `sequence_len` or `error` to raise an error."
+        )
 
     if is_main_process():
         if cfg.cleanup_output_dir_on_start is True:
@@ -181,6 +187,9 @@ def make_axolotl_config(config_base, kwargs, timestamp=None):
         set_cfg_option_if_auto(cfg, "flash_attn_fuse_mlp", cfg.adapter not in {"qlora", "lora"})
         set_cfg_option_if_auto(cfg, "flash_attn_fuse_qkv", cfg.adapter not in {"qlora", "lora"})
 
+        set_cfg_option_if_auto(
+            cfg, "batch_flattening", not cfg.sample_packing and cfg.flash_attention and cfg.micro_batch_size > 1
+        )
         set_cfg_option_if_auto(cfg, "optimizer", "adamw_torch_fused" if cfg.adapter == "qlora" else "adamw_torch")
 
         if cfg.datasets == "auto":
