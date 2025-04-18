@@ -1,8 +1,8 @@
-# https://hub.docker.com/layers/winglian/axolotl/main-20241217/images/sha256-5ed6e068d193ac35d092f8d6ccb56b1750779415cd07047edbbfb8d4edd87ae2
-FROM winglian/axolotl@sha256:0966ba0bdfda0a317016614a6eb9f599325d0e42109544f95f5540d144ddeebd
+# https://hub.docker.com/layers/winglian/axolotl/main-20250418/images/sha256-ecdf051ff0c4c2810ea8d0a9c3fde6253cd6f9c3fdeb2a016946bcae60b989e0
+FROM winglian/axolotl@sha256:c8170826b915c164f898ab6a2be37d5c1eefc1c59a3db163135decaaaba7856b
 SHELL ["/bin/bash", "-c"]
 USER root
-RUN [ "$(/usr/local/cuda/bin/nvcc --version | egrep -o "V[0-9]+\.[0-9]+" | cut -c2-)" = "12.1" ] || (echo "Error: CUDA version is not 12.1" && exit 1)
+RUN [ "$(/usr/local/cuda/bin/nvcc --version | egrep -o "V[0-9]+\.[0-9]+" | cut -c2-)" = "12.4" ] || (echo "Error: CUDA version is not 12.4" && exit 1)
 
 # Install torch and axolotl requirements
 COPY base-requirements.txt requirements.txt /tmp/llm-finetune/

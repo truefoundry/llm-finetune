@@ -56,8 +56,10 @@ def _make_dataset_file_source(
             "ds_type": "json",
             "type": "chat_template",
             "field_messages": "messages",
-            "message_field_role": "role",
-            "message_field_content": "content",
+            "message_property_mappings": {
+                "role": "role",
+                "content": "content",
+            },
             "roles": {
                 "system": ["system"],
                 "user": ["user", "human"],
