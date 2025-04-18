@@ -161,7 +161,7 @@ def generate_run_name(model_id, seed: Optional[int] = None):
 
 
 def get_or_create_run(ml_repo: str, run_name: str, auto_end: bool = False):
-    from truefoundry.ml.autogen.client.exceptions import NotFoundException
+    from truefoundry.ml._autogen.client.exceptions import NotFoundException
 
     client = ml.get_client()
     try:
