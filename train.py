@@ -1,4 +1,5 @@
 import axolotl.logging_config
+from axolotl.train import cleanup_distributed
 
 axolotl.logging_config.configure_logging()
 
@@ -305,6 +306,10 @@ def _train_with_truefoundry(config_base: Path = Path("examples/"), **kwargs):
                 step=log_step,
             )
             run.end()
+    
+    cfg = load_config_file(path=axolotl_config)
+    if not cfg.use_ray:
+        cleanup_distributed()
 
 
 def train_with_truefoundry(config_base: Path = Path("examples/"), **kwargs):

@@ -1,13 +1,11 @@
---extra-index-url https://download.pytorch.org/whl/cu121
+--extra-index-url https://download.pytorch.org/whl/cu124
 cloud-files==4.29.0
-cut-cross-entropy[transformers] @ git+https://github.com/apple/ml-cross-entropy.git@1f3ebdb20653a26598a2722acd21e9b1528608c3
+cut-cross-entropy[transformers] @ git+https://github.com/apple/ml-cross-entropy.git@058369b06bc0c465fbf0ac372c3a8e18d62df52f
 fsspec==2024.9.0
 hf-transfer<0.2.0
 pyarrow>=15.0.0,<19.0.0
 rich>=13.0.0,<14
 s3fs==2024.9.0
 snowflake-connector-python[pandas]==3.12.3
-torch==2.5.0+cu121
-torchao==0.7.0+cu121
-transformers @ git+https://github.com/truefoundry/transformers.git@09a21295f3a13bf81b4fc22057bb2fc9ae063891
-truefoundry==0.5.3rc2
+torch==2.5.1+cu124
+truefoundry==0.6.6

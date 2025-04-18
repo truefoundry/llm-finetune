@@ -59,6 +59,7 @@ ddp_timeout: 21600
 deepspeed: ./deepspeed_configs/3_ds_z2_config.json
 default_system_message: null
 device_map: null
+drop_system_message: null
 early_stopping_patience: 10
 eval_sample_packing: False
 eval_steps: 0.1
@@ -73,8 +74,11 @@ load_best_model_at_end: True
 load_in_8bit: False
 logging_steps: 5
 lora_alpha: 64
-lora_dropout: 0.05
+lora_dropout: 0
+lora_mlp_kernel: True
+lora_o_kernel: True
 lora_on_cpu: False
+lora_qkv_kernel: True
 lora_r: 32
 lora_target_linear: True
 lora_target_modules: null
