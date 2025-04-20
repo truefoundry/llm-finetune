@@ -2,5 +2,5 @@
 -r base-requirements.txt
 unsloth-zoo==2024.12.1
 unsloth[cu124-ampere-torch251]==2024.12.4
-axolotl[flash-attn,optimizers,lion-pytorch,galore] @ git+https://github.com/truefoundry/axolotl@1d354b4d7afd89f45a804f157619a132f8e0ee22
+axolotl[flash-attn,optimizers,lion-pytorch,galore] @ git+https://github.com/truefoundry/axolotl@8335ce61542e24ae1c820f656b953d455a71b140
 deepspeed==0.16.6
