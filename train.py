@@ -14,9 +14,9 @@ import fire
 import yaml
 from axolotl.cli.merge_lora import do_cli as axolotl_merge_lora_cli
 from axolotl.cli.train import do_cli as axolotl_train_cli
+from axolotl.loaders import load_tokenizer
 from axolotl.utils.dict import DictDefault
 from axolotl.utils.distributed import barrier, is_main_process, zero_first
-from axolotl.utils.models import load_tokenizer
 from rich import console, panel
 from transformers.utils import is_torch_bf16_gpu_available, is_torch_tf32_available
 
@@ -255,6 +255,7 @@ def _train_with_truefoundry(config_base: Path = Path("examples/"), **kwargs):
             timestamp=timestamp,
         )
     barrier()
+    cleanup_distributed()
     axolotl_train_cli(config=axolotl_config)
     barrier()
     logger.info("Clearing gpus before moving ahead ...")
@@ -306,7 +307,7 @@ def _train_with_truefoundry(config_base: Path = Path("examples/"), **kwargs):
                 step=log_step,
             )
             run.end()
-    
+
     cfg = load_config_file(path=axolotl_config)
     if not cfg.use_ray:
         cleanup_distributed()

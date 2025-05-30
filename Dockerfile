@@ -1,5 +1,5 @@
-# https://hub.docker.com/layers/winglian/axolotl/main-20250418/images/sha256-ecdf051ff0c4c2810ea8d0a9c3fde6253cd6f9c3fdeb2a016946bcae60b989e0
-FROM winglian/axolotl@sha256:c8170826b915c164f898ab6a2be37d5c1eefc1c59a3db163135decaaaba7856b
+# https://hub.docker.com/layers/winglian/axolotl/main-20250530/images/sha256-2d4006e9ad7816f3e5b52b5557ccae5ff75d451fc8fb6cd3a6871301d88890fb
+FROM winglian/axolotl@sha256:6364ae1f773610b2d4ebb4bfbc04bbd60a3d4dbadbcb16413710cec72f5bbf88
 SHELL ["/bin/bash", "-c"]
 USER root
 RUN [ "$(/usr/local/cuda/bin/nvcc --version | egrep -o "V[0-9]+\.[0-9]+" | cut -c2-)" = "12.4" ] || (echo "Error: CUDA version is not 12.4" && exit 1)

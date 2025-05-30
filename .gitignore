@@ -18,5 +18,6 @@ output/
 outputs/
 *.egg-info/
 .ipynb_checkpoints/
+sample_run.1.sh
 !sample_data/chatalpaca-openai-1k.jsonl
 !sample_data/multiply-1k.jsonl
