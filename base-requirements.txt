@@ -8,4 +8,4 @@ rich>=13.0.0,<14
 s3fs==2024.9.0
 snowflake-connector-python[pandas]==3.12.3
 torch==2.5.1+cu124
-truefoundry==0.6.6
+truefoundry==0.9.1
