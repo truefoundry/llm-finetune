@@ -73,6 +73,10 @@ jobs:
       artifactory_repository_url: ${{ vars.TRUEFOUNDRY_ARTIFACTORY_PUBLIC_REPOSITORY }}
       image_artifact_name: llm-finetune
       image_tag: "${{ github.sha }}"
+      free_disk_space: true
+      free_disk_space_large_packages: true
+      free_disk_space_docker_images: true
+      free_disk_space_tool_cache_storage: true
     secrets:
       artifactory_username: ${{ secrets.TRUEFOUNDRY_ARTIFACTORY_PUBLIC_USERNAME }}
       artifactory_password: ${{ secrets.TRUEFOUNDRY_ARTIFACTORY_PUBLIC_PASSWORD }}
@@ -101,7 +105,7 @@ jobs:
       artifactory_password: ${{ secrets.TRUEFOUNDRY_ARTIFACTORY_PUBLIC_PASSWORD }}
 
   push_notebook_image_soci_index:
-    name: Push SOCI Index
+    name: Push SOCI Index For Notebook Image
     needs: build_notebook_image
     uses: truefoundry/github-workflows-public/.github/workflows/build-and-push-soci-index.yml@v0.1.7
     with:
@@ -110,6 +114,10 @@ jobs:
       artifactory_repository_url: ${{ vars.TRUEFOUNDRY_ARTIFACTORY_PUBLIC_REPOSITORY }}
       image_artifact_name: llm-finetune-jupyter
       image_tag: "${{ github.sha }}"
+      free_disk_space: true
+      free_disk_space_large_packages: true
+      free_disk_space_docker_images: true
+      free_disk_space_tool_cache_storage: true
     secrets:
       artifactory_username: ${{ secrets.TRUEFOUNDRY_ARTIFACTORY_PUBLIC_USERNAME }}
       artifactory_password: ${{ secrets.TRUEFOUNDRY_ARTIFACTORY_PUBLIC_PASSWORD }}
