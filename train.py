@@ -1,5 +1,5 @@
 import axolotl.logging_config
-from axolotl.train import cleanup_distributed
+
 
 axolotl.logging_config.configure_logging()
 
@@ -7,18 +7,17 @@ axolotl.logging_config.configure_logging()
 import logging
 import os
 import shutil
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
 import fire
 import yaml
 from axolotl.cli.merge_lora import do_cli as axolotl_merge_lora_cli
 from axolotl.cli.train import do_cli as axolotl_train_cli
-from axolotl.loaders import load_tokenizer
 from axolotl.utils.dict import DictDefault
-from axolotl.utils.distributed import barrier, is_main_process, zero_first
+from axolotl.utils.distributed import barrier, is_main_process, cleanup_distributed
 from rich import console, panel
-from transformers.utils import is_torch_bf16_gpu_available, is_torch_tf32_available
+from transformers.utils.import_utils import is_torch_bf16_gpu_available, is_torch_tf32_available
 
 from checkpoint_utils import (
     cleanup_checkpoints,
@@ -69,7 +68,9 @@ def load_config_file(path):
     return cfg
 
 
-def make_axolotl_config(config_base, kwargs, timestamp=None):
+def _make_axolotl_config(config_base, kwargs, timestamp=None):
+    import torch
+
     cfg = load_config_file(path=config_base)
     cfg_keys = cfg.keys()
     # TODO: Support nested overriding via kwargs: --a.b.c or --a.0.b
@@ -90,7 +91,7 @@ def make_axolotl_config(config_base, kwargs, timestamp=None):
             "`drop` to drop sequences longer than `sequence_len` or `error` to raise an error."
         )
 
-    if is_main_process():
+    if torch.distributed.get_rank() == 0:
         if cfg.cleanup_output_dir_on_start is True:
             logger.warning(f"--cleanup_output_dir_on_start was to set to True, wiping {cfg.output_dir}")
             if os.path.exists(cfg.output_dir):
@@ -101,9 +102,7 @@ def make_axolotl_config(config_base, kwargs, timestamp=None):
     cfg.output_dir = os.path.join(os.path.abspath(cfg.output_dir), "model")
     axolotl_config = os.path.join(cfg.output_dir, "axolotl_config.yaml")
 
-    if is_main_process():
-        import torch
-
+    if torch.distributed.get_rank() == 0:
         set_cfg_option_if_auto(cfg, "tokenizer_config", cfg.base_model_config or cfg.base_model)
 
         os.makedirs(cfg.data_dir, exist_ok=True)
@@ -221,13 +220,7 @@ def make_axolotl_config(config_base, kwargs, timestamp=None):
         # TODO: Upload processed data to resume from
         set_cfg_option_if_auto(cfg, "resume_from_checkpoint", None)
 
-        # TODO: Figure if we should mess around and add special tokens
-        # Problem is axolotl tries fixing/adding some tokens by its own.
-        # We don't want to override those decisions without understanding the consequences
         set_cfg_option_if_auto(cfg, "special_tokens", {})
-        tokenizer = load_tokenizer(cfg=cfg)
-        if not tokenizer.pad_token:
-            cfg["special_tokens"]["pad_token"] = tokenizer.eos_token
         set_cfg_option_if_auto(cfg, "lora_modules_to_save", [])
         logger.info(f"Prepared config: {cfg}")
         # This hack is needed because yaml dump refuses to treat DictDefault as dict
@@ -244,18 +237,28 @@ def make_axolotl_config(config_base, kwargs, timestamp=None):
     return axolotl_config
 
 
+def make_axolotl_config(config_base, kwargs, timestamp=None):
+    import torch
+    torch.distributed.init_process_group(backend="gloo", timeout=timedelta(seconds=30))
+    if torch.distributed.get_rank() != 0:
+        torch.distributed.barrier()
+    config = _make_axolotl_config(config_base, kwargs, timestamp)
+    if torch.distributed.get_rank() == 0:
+        torch.distributed.barrier()
+    torch.distributed.barrier()
+    torch.distributed.destroy_process_group()
+    return config
+
+
 def _train_with_truefoundry(config_base: Path = Path("examples/"), **kwargs):
     maybe_set_custom_tempdir()
     maybe_set_torch_max_memory(device=LOCAL_RANK)
     timestamp = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H-%M-%S")
-    with zero_first(is_main_process()):
-        axolotl_config = make_axolotl_config(
-            config_base=config_base,
-            kwargs=kwargs,
-            timestamp=timestamp,
-        )
-    barrier()
-    cleanup_distributed()
+    axolotl_config = make_axolotl_config(
+        config_base=config_base,
+        kwargs=kwargs,
+        timestamp=timestamp,
+    )
     axolotl_train_cli(config=axolotl_config)
     barrier()
     logger.info("Clearing gpus before moving ahead ...")
