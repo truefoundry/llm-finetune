@@ -187,6 +187,12 @@ def _make_axolotl_config(config_base, kwargs, timestamp=None):
         set_cfg_option_if_auto(cfg, "flash_attn_fuse_mlp", cfg.adapter not in {"qlora", "lora"})
         set_cfg_option_if_auto(cfg, "flash_attn_fuse_qkv", cfg.adapter not in {"qlora", "lora"})
 
+        if cfg.lora_dropout is not None and cfg.lora_dropout != 0:
+            logger.warning("LoRA dropout is greater than 0. Disabling LoRA kernel patching.")
+            cfg.lora_mlp_kernel = False
+            cfg.lora_qkv_kernel = False
+            cfg.lora_o_kernel = False
+
         set_cfg_option_if_auto(
             cfg, "batch_flattening", not cfg.sample_packing and cfg.flash_attention and cfg.micro_batch_size > 1
         )
