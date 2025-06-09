@@ -4,7 +4,7 @@
 export PYTORCH_CUDA_ALLOC_CONF="expandable_segments:True,roundup_power2_divisions:16"
 
 ## This controls how many GPUs you want to use
-export CUDA_VISIBLE_DEVICES=0,1
+export CUDA_VISIBLE_DEVICES=0,1,2,3
 ## This controls how much memory to user per gpu
 export TORCH_PER_PROCESS_MEMORY_LIMIT=0.98
 export HF_HUB_ENABLE_HF_TRANSFER=1
@@ -32,7 +32,7 @@ accelerate launch \
 train.py \
 config-base.yaml \
 --deepspeed ./deepspeed_configs/3_ds_z2_config.json \
---base_model Qwen/Qwen2.5-0.5B-Instruct \
+--base_model unsloth/Llama-3.2-1B-Instruct \
 --dataset_type chat \
 --train_data_uri ./sample_data/multiply-1k.jsonl \
 --val_data_uri None \
@@ -42,7 +42,7 @@ config-base.yaml \
 --max_steps 0 \
 --micro_batch_size 4 \
 --eval_batch_size 4 \
---num_epochs 10 \
+--num_epochs 2 \
 --gradient_accumulation_steps 4 \
 --gradient_checkpointing unsloth \
 --learning_rate 0.0001 \
