@@ -1,0 +1,13 @@
+torch
+transformers
+peft
+accelerate
+bitsandbytes
+scipy
+fire
+pyyaml
+rich
+truefoundry
+cloud-files
+fsspec
+pyarrow

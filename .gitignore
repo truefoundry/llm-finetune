@@ -1,6 +1,8 @@
 .idea/
 .venv/
 venv/
+env/
+
 *.py[cod]
 model/
 models/

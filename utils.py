@@ -7,7 +7,10 @@ import tempfile
 import time
 from typing import Optional
 
-import pynvml
+try:
+    import pynvml
+except ImportError:
+    pynvml = None
 import torch
 from pydantic.v1 import BaseModel
 
@@ -17,6 +20,8 @@ logger = logging.getLogger("axolotl")
 def get_gpu_metrics():
     gpu_count = torch.cuda.device_count()
     metrics = {}
+    if pynvml is None:
+        return metrics
     try:
         pynvml.nvmlInit()
         for i in range(gpu_count):
@@ -74,7 +79,8 @@ def maybe_set_torch_max_memory(device: int):
             logger.info(f"Setting max memory limit on device {device} to {frac} ({torch_per_process_memory_limit} MiB)")
             torch.cuda.set_per_process_memory_fraction(frac, device=device)
     else:
-        torch.cuda.set_per_process_memory_fraction(0.95, device=device)
+        if torch.cuda.is_available() and device >= 0:
+            torch.cuda.set_per_process_memory_fraction(0.95, device=device)
 
 
 @contextlib.contextmanager
